@@ -1,0 +1,13 @@
+run = "npm install && npm run dev"
+entrypoint = "src/App.jsx"
+modules = ["nodejs-20"]
+
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+run = ["sh", "-c", "npm run build && npm run preview"]
+
+[[ports]]
+localPort = 5173
+externalPort = 80

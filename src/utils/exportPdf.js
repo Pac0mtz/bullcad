@@ -1,0 +1,613 @@
+// Real PDF export via jsPDF + svg2pdf.js. The plan is drawn as a vector SVG and
+// rendered into the PDF (so it stays crisp), with an optional legend / title
+// block. Paper size, orientation and contents are chosen in the export modal.
+
+import { jsPDF } from 'jspdf';
+import { svg2pdf } from 'svg2pdf.js';
+import {
+  dist, lerp, angleOf, centroidOf, wallDimGeometry, wallOpeningDimGeometry, justifiedSegments, WINDOW_STYLES, FENCE_TYPES, postsAlong,
+  formatFeetInches, windowBars, stairGeometry,
+} from './geometry.js';
+import { computeQuantities, fenceComponents } from './quantities.js';
+
+const NAVY = '#0a2540';
+const FENCE_THICK = 0.3;
+const r2 = (n) => Math.round(n * 1000) / 1000;
+
+// A dimension label drawn inside a white rounded pill (matches the on-screen look).
+function dimPill(x, y, angle, text, fs) {
+  const w = text.length * fs * 0.6 + fs * 0.5;
+  const h = fs * 1.45;
+  return `<g transform="translate(${r2(x)} ${r2(y)}) rotate(${r2(angle)})">`
+    + `<rect x="${r2(-w / 2)}" y="${r2(-h / 2)}" width="${r2(w)}" height="${r2(h)}" rx="${r2(fs * 0.3)}" fill="#ffffff" stroke="#cbd5e1" stroke-width="0.01"/>`
+    + `<text x="0" y="${r2(fs * 0.33)}" font-size="${fs}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="bold" fill="${NAVY}">${text}</text>`
+    + `</g>`;
+}
+
+// Build the plan as an SVG string + its size in feet (for aspect-correct fit).
+export function buildPlanSvg(model, opts = {}) {
+  const { walls, openings, fences, gates } = model;
+  const pts = [];
+  walls.forEach((w) => pts.push(w.a, w.b));
+  fences.forEach((f) => pts.push(f.a, f.b));
+  (model.labels || []).forEach((lb) => { if (lb.anchor) pts.push(lb.anchor); if (lb.pos) pts.push(lb.pos); });
+  (model.stairs || []).forEach((st) => {
+    const g = stairGeometry(st), c = Math.cos((st.rotation || 0) * Math.PI / 180), s = Math.sin((st.rotation || 0) * Math.PI / 180);
+    g.outline.forEach((p) => pts.push({ x: st.x + p.x * c - p.y * s, y: st.y + p.x * s + p.y * c }));
+  });
+  if (!pts.length) return { svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"></svg>', wFt: 10, hFt: 10 };
+
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+  const pad = 5;
+  const minX = Math.min(...xs) - pad, minY = Math.min(...ys) - pad;
+  const wFt = Math.max(...xs) + pad - minX, hFt = Math.max(...ys) + pad - minY;
+  const centroid = centroidOf(walls.flatMap((w) => [w.a, w.b]));
+  const fenceCentroid = centroidOf(fences.flatMap((f) => [f.a, f.b]));
+  const wj = opts.wallJustify || 'center';
+  const fj = opts.fenceJustify || 'center';
+  // mitered, face-justified endpoints — same source of truth as the 2D/3D views
+  const wallSegs = justifiedSegments(walls, wj, centroid, (w) => w.thickness);
+  const fenceSegs = justifiedSegments(fences, fj, fenceCentroid, () => FENCE_THICK);
+  const wSeg = (w) => wallSegs.get(w.id) || { a: w.a, b: w.b };
+  const fSeg = (f) => fenceSegs.get(f.id) || { a: f.a, b: f.b };
+  const el = [];
+
+  fences.forEach((f) => {
+    const ft = FENCE_TYPES[f.fenceType] || FENCE_TYPES.wood;
+    const s = fSeg(f);
+    const col = f.color || ft.color;
+    const dash = ft.style === 'mesh' ? '0.3 0.4' : ft.style === 'pickets' ? '0.7 0.4' : ft.style === 'slat' ? '0.5 0.3' : ft.style === 'rail' ? '0.9 0.5' : '';
+    el.push(`<line x1="${r2(s.a.x)}" y1="${r2(s.a.y)}" x2="${r2(s.b.x)}" y2="${r2(s.b.y)}" stroke="${col}" stroke-width="0.3" stroke-linecap="round"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`);
+    postsAlong(s.a, s.b, f.postSpacing || 8).forEach((p) =>
+      el.push(`<rect x="${r2(p.x - 0.18)}" y="${r2(p.y - 0.18)}" width="0.36" height="0.36" fill="${NAVY}"/>`));
+  });
+
+  walls.forEach((w) => {
+    const th = Math.max(0.15, w.thickness);
+    const s = wSeg(w);
+    el.push(`<line x1="${r2(s.a.x)}" y1="${r2(s.a.y)}" x2="${r2(s.b.x)}" y2="${r2(s.b.y)}" stroke="${NAVY}" stroke-width="${r2(th)}" stroke-linecap="square"/>`);
+  });
+
+  const outwardSign = (w) => {
+    const L = dist(w.a, w.b) || 1;
+    const nx = -(w.b.y - w.a.y) / L, ny = (w.b.x - w.a.x) / L;
+    const mid = { x: (w.a.x + w.b.x) / 2, y: (w.a.y + w.b.y) / 2 };
+    return nx * (centroid.x - mid.x) + ny * (centroid.y - mid.y) > 0 ? -1 : 1;
+  };
+
+  // sign that makes a gate/door leaf swing toward the enclosed side (away from the
+  // dimension strings, which sit on the outside). +1/−1 in the element's local y.
+  const inwardSign = (a, b, cen) => {
+    const L = dist(a, b) || 1;
+    const vx = (b.y - a.y) / L, vy = -(b.x - a.x) / L; // world dir of local −y
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    return vx * (cen.x - mid.x) + vy * (cen.y - mid.y) >= 0 ? -1 : 1;
+  };
+  // resolve hinge/swing overrides into hinge x, far-jamb x, leaf dir + arc sweep
+  const swingGeom = (halfW, inward, hinge, swing) => {
+    const d = (swing === 'out' ? -1 : 1) * inward;
+    const left = hinge !== 'right';
+    return { d, hx: left ? -halfW : halfW, farX: left ? halfW : -halfW, sweep: (left === (d === -1)) ? 1 : 0 };
+  };
+
+  openings.forEach((o) => {
+    const w = walls.find((x) => x.id === o.wallId);
+    if (!w) return;
+    const s = wSeg(w);
+    const c = lerp(s.a, s.b, o.t);
+    const ang = r2((angleOf(s.a, s.b) * 180) / Math.PI);
+    const th = Math.max(0.2, w.thickness) + 0.06;
+    const hw = o.width / 2;
+    const proj = o.type === 'window' ? WINDOW_STYLES[o.style]?.project : null;
+    let inner = `<rect x="${r2(-hw)}" y="${r2(-th / 2)}" width="${r2(o.width)}" height="${r2(th)}" fill="#ffffff"/>`;
+    inner += `<line x1="${r2(-hw)}" y1="${r2(-th / 2)}" x2="${r2(-hw)}" y2="${r2(th / 2)}" stroke="${NAVY}" stroke-width="0.06"/>`;
+    inner += `<line x1="${r2(hw)}" y1="${r2(-th / 2)}" x2="${r2(hw)}" y2="${r2(th / 2)}" stroke="${NAVY}" stroke-width="0.06"/>`;
+    if (o.type === 'door') {
+      const { d, hx, farX, sweep } = swingGeom(hw, inwardSign(s.a, s.b, centroid), o.hinge, o.swing);
+      inner += `<line x1="${r2(hx)}" y1="0" x2="${r2(hx)}" y2="${r2(d * o.width)}" stroke="${NAVY}" stroke-width="0.06"/>`;
+      inner += `<path d="M ${r2(hx)} ${r2(d * o.width)} A ${r2(o.width)} ${r2(o.width)} 0 0 ${sweep} ${r2(farX)} 0" fill="none" stroke="${NAVY}" stroke-width="0.05" stroke-dasharray="0.3 0.22"/>`;
+    } else if (proj) {
+      const d = (WINDOW_STYLES[o.style].depth || 1.5) * outwardSign(w);
+      if (proj === 'bay') inner += `<polygon points="${r2(-hw)},0 ${r2(-hw / 2)},${r2(d)} ${r2(hw / 2)},${r2(d)} ${r2(hw)},0" fill="none" stroke="${NAVY}" stroke-width="0.06"/>`;
+      else inner += `<polygon points="${r2(-hw)},0 ${r2(-hw)},${r2(d)} ${r2(hw)},${r2(d)} ${r2(hw)},0" fill="none" stroke="${NAVY}" stroke-width="0.06"/>`;
+    } else if (o.type === 'window') {
+      inner += `<line x1="${r2(-hw)}" y1="-0.08" x2="${r2(hw)}" y2="-0.08" stroke="${NAVY}" stroke-width="0.05"/>`;
+      inner += `<line x1="${r2(-hw)}" y1="0.08" x2="${r2(hw)}" y2="0.08" stroke="${NAVY}" stroke-width="0.05"/>`;
+    }
+    el.push(`<g transform="translate(${r2(c.x)} ${r2(c.y)}) rotate(${ang})">${inner}</g>`);
+  });
+
+  gates.forEach((g) => {
+    const f = fences.find((x) => x.id === g.fenceId);
+    if (!f) return;
+    const s = fSeg(f);
+    const c = lerp(s.a, s.b, g.t);
+    const ang = r2((angleOf(s.a, s.b) * 180) / Math.PI);
+    const hw = g.width / 2, gw = g.width, type = g.gateType || 'swing';
+    const gcol = g.color || f.color || (FENCE_TYPES[f.fenceType] || FENCE_TYPES.wood).color;
+    const inward = inwardSign(s.a, s.b, fenceCentroid); // swing toward the enclosed side
+    const d = (g.swing === 'out' ? -1 : 1) * inward;
+    const sweep = d === -1 ? 1 : 0;
+    let inner = `<rect x="${r2(-hw)}" y="-0.3" width="${r2(gw)}" height="0.6" fill="#ffffff"/>`;
+    // hinge posts at the two jambs
+    inner += `<rect x="${r2(-hw - 0.18)}" y="-0.18" width="0.36" height="0.36" fill="${NAVY}"/>`;
+    inner += `<rect x="${r2(hw - 0.18)}" y="-0.18" width="0.36" height="0.36" fill="${NAVY}"/>`;
+    if (type === 'swing') {
+      // solid leaf (full width) + dashed 90° arc, radius = width, to the far jamb
+      const sg = swingGeom(hw, inward, g.hinge, g.swing);
+      inner += `<line x1="${r2(sg.hx)}" y1="0" x2="${r2(sg.hx)}" y2="${r2(sg.d * gw)}" stroke="${gcol}" stroke-width="0.1"/>`;
+      inner += `<path d="M ${r2(sg.hx)} ${r2(sg.d * gw)} A ${r2(gw)} ${r2(gw)} 0 0 ${sg.sweep} ${r2(sg.farX)} 0" fill="none" stroke="${gcol}" stroke-width="0.05" stroke-dasharray="0.3 0.22"/>`;
+    } else if (type === 'double') {
+      // two leaves, each half the opening, meeting in the middle
+      inner += `<line x1="${r2(-hw)}" y1="0" x2="${r2(-hw)}" y2="${r2(d * hw)}" stroke="${gcol}" stroke-width="0.1"/>`;
+      inner += `<path d="M ${r2(-hw)} ${r2(d * hw)} A ${r2(hw)} ${r2(hw)} 0 0 ${sweep} 0 0" fill="none" stroke="${gcol}" stroke-width="0.05" stroke-dasharray="0.3 0.22"/>`;
+      inner += `<line x1="${r2(hw)}" y1="0" x2="${r2(hw)}" y2="${r2(d * hw)}" stroke="${gcol}" stroke-width="0.1"/>`;
+      inner += `<path d="M ${r2(hw)} ${r2(d * hw)} A ${r2(hw)} ${r2(hw)} 0 0 ${1 - sweep} 0 0" fill="none" stroke="${gcol}" stroke-width="0.05" stroke-dasharray="0.3 0.22"/>`;
+    } else {
+      // sliding — leaf parked just inside the opening, parallel to the fence
+      inner += `<line x1="${r2(-hw)}" y1="${r2(d * 0.35)}" x2="${r2(hw)}" y2="${r2(d * 0.35)}" stroke="${gcol}" stroke-width="0.16"/>`;
+    }
+    el.push(`<g transform="translate(${r2(c.x)} ${r2(c.y)}) rotate(${ang})">${inner}</g>`);
+  });
+
+  const kinds = opts.dimMode === 'off' ? []
+    : opts.dimMode === 'both' ? ['interior', 'exterior']
+    : [opts.dimMode || 'exterior'];
+  const baseOff = opts.dimOffset ?? 1;
+  const unit = opts.dimUnit; // undefined = feet-inches; 'in' = inches only
+  const hasOpenings = openings.length > 0;
+  const ROW_GAP = 1.6;
+  walls.forEach((w) => kinds.forEach((k) => {
+    const extra = hasOpenings && k !== 'interior' ? ROW_GAP : 0;
+    const dg = wallDimGeometry(w, k, (w.dimOff ?? baseOff) + extra, centroid, wj, unit);
+    if (!dg) return;
+    dg.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.035"/>`));
+    el.push(`<line x1="${r2(dg.line[0].x)}" y1="${r2(dg.line[0].y)}" x2="${r2(dg.line[1].x)}" y2="${r2(dg.line[1].y)}" stroke="${NAVY}" stroke-width="0.035"/>`);
+    dg.slashes.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.06"/>`));
+    el.push(dimPill(dg.label.x, dg.label.y, dg.label.angle, dg.label.text, 0.5));
+  }));
+
+  // opening dimension strings (wall length split at every opening)
+  if (opts.dimMode !== 'off') walls.forEach((w) => {
+    const wops = openings.filter((o) => o.wallId === w.id);
+    const og = wallOpeningDimGeometry(w, wops, w.openDimOff ?? baseOff, centroid, wj, unit);
+    if (!og) return;
+    og.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.03"/>`));
+    og.segments.forEach((seg) => el.push(`<line x1="${r2(seg.line[0].x)}" y1="${r2(seg.line[0].y)}" x2="${r2(seg.line[1].x)}" y2="${r2(seg.line[1].y)}" stroke="${NAVY}" stroke-width="0.03"/>`));
+    og.ticks.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.05"/>`));
+    og.segments.forEach((seg) => el.push(dimPill(seg.label.x, seg.label.y, seg.label.angle, seg.label.text, 0.42)));
+  });
+
+  // fence dimensions — overall length + gate splits (mirrors walls)
+  if (opts.dimMode !== 'off') fences.forEach((f) => {
+    const fw = { ...f, thickness: FENCE_THICK };
+    const fgates = gates.filter((g) => g.fenceId === f.id);
+    const extra = fgates.length ? ROW_GAP : 0;
+    const fbase = f.dimOff ?? baseOff;
+    const dg = wallDimGeometry(fw, 'centerline', fbase + extra, fenceCentroid, fj, unit);
+    if (dg) {
+      dg.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.035"/>`));
+      el.push(`<line x1="${r2(dg.line[0].x)}" y1="${r2(dg.line[0].y)}" x2="${r2(dg.line[1].x)}" y2="${r2(dg.line[1].y)}" stroke="${NAVY}" stroke-width="0.035"/>`);
+      dg.slashes.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.06"/>`));
+      el.push(dimPill(dg.label.x, dg.label.y, dg.label.angle, dg.label.text, 0.46));
+    }
+    const og = wallOpeningDimGeometry(fw, fgates, f.openDimOff ?? fbase, fenceCentroid, fj, unit);
+    if (og) {
+      og.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.03"/>`));
+      og.segments.forEach((seg) => el.push(`<line x1="${r2(seg.line[0].x)}" y1="${r2(seg.line[0].y)}" x2="${r2(seg.line[1].x)}" y2="${r2(seg.line[1].y)}" stroke="${NAVY}" stroke-width="0.03"/>`));
+      og.ticks.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.05"/>`));
+      og.segments.forEach((seg) => el.push(dimPill(seg.label.x, seg.label.y, seg.label.angle, seg.label.text, 0.38)));
+    }
+  });
+
+  // stairs — charcoal lines, walk line with a start dot + arrowhead + inside "UP"
+  const SLINE = '#475569';
+  (model.stairs || []).forEach((st) => {
+    const g = stairGeometry(st), tp = (p) => `${r2(p.x)},${r2(p.y)}`;
+    let inner = `<polygon points="${g.outline.map(tp).join(' ')}" fill="#ffffff" stroke="${SLINE}" stroke-width="0.06"/>`;
+    g.treads.forEach((t) => { inner += `<polygon points="${t.poly.map(tp).join(' ')}" fill="${t.landing ? 'rgba(100,116,139,0.12)' : 'none'}" stroke="${SLINE}" stroke-width="0.04"/>`; });
+    if (g.post) inner += `<circle cx="0" cy="0" r="${r2(g.post.r)}" fill="${SLINE}"/>`;
+    if (g.arrow) {
+      const a = g.arrow, ang = Math.atan2(a.to.y - a.from.y, a.to.x - a.from.x), al = 0.4, aw = 0.18, ux = Math.cos(ang), uy = Math.sin(ang), nx = -uy, ny = ux;
+      inner += `<circle cx="${r2(a.from.x)}" cy="${r2(a.from.y)}" r="0.12" fill="${SLINE}"/>`;
+      inner += `<line x1="${r2(a.from.x)}" y1="${r2(a.from.y)}" x2="${r2(a.to.x)}" y2="${r2(a.to.y)}" stroke="${SLINE}" stroke-width="0.05"/>`;
+      inner += `<polygon points="${r2(a.to.x)},${r2(a.to.y)} ${r2(a.to.x - ux * al + nx * aw)},${r2(a.to.y - uy * al + ny * aw)} ${r2(a.to.x - ux * al - nx * aw)},${r2(a.to.y - uy * al - ny * aw)}" fill="${SLINE}"/>`;
+      inner += `<text x="${r2(a.from.x + 0.4)}" y="${r2(a.from.y + 0.15)}" font-size="0.5" fill="${SLINE}" font-family="Helvetica" font-weight="bold">UP</text>`;
+    }
+    el.push(`<g transform="translate(${r2(st.x)} ${r2(st.y)}) rotate(${r2(st.rotation || 0)})">${inner}</g>`);
+  });
+
+  // labels (leader-line callouts) — drawn on top
+  const escXml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  (model.labels || []).forEach((lb) => {
+    const a = lb.anchor, p = lb.pos;
+    if (!a || !p) return;
+    const ff = (lb.fontSize || 12) * 0.06; // px → plan feet
+    const rows = String(lb.text || '').split('\n');
+    const longest = rows.reduce((mx, r) => Math.max(mx, r.length), 1);
+    const pw = Math.max(ff * 2, longest * ff * 0.56 + ff * 0.9), ph = rows.length * ff * 1.32 + ff * 0.55;
+    const lineC = lb.line || NAVY, arrowC = lb.arrow || lineC, borderC = lb.border || '#2563eb';
+    el.push(`<line x1="${r2(p.x)}" y1="${r2(p.y)}" x2="${r2(a.x)}" y2="${r2(a.y)}" stroke="${lineC}" stroke-width="${r2(ff * 0.09)}"/>`);
+    const ang = Math.atan2(a.y - p.y, a.x - p.x), al = ff * 0.75, aw = ff * 0.32;
+    const ux = Math.cos(ang), uy = Math.sin(ang), nx = -uy, ny = ux;
+    el.push(`<polygon points="${r2(a.x)},${r2(a.y)} ${r2(a.x - ux * al + nx * aw)},${r2(a.y - uy * al + ny * aw)} ${r2(a.x - ux * al - nx * aw)},${r2(a.y - uy * al - ny * aw)}" fill="${arrowC}"/>`);
+    el.push(`<rect x="${r2(p.x - pw / 2)}" y="${r2(p.y - ph / 2)}" width="${r2(pw)}" height="${r2(ph)}" rx="${r2(ff * 0.4)}" fill="#ffffff" stroke="${borderC}" stroke-width="${r2(ff * 0.12)}"/>`);
+    rows.forEach((row, i) => {
+      const ty = p.y - ph / 2 + ff * 1.02 + i * ff * 1.32;
+      el.push(`<text x="${r2(p.x)}" y="${r2(ty)}" font-size="${r2(ff)}" fill="#1e293b" font-family="Helvetica, Arial, sans-serif" font-weight="600" text-anchor="middle">${escXml(row)}</text>`);
+    });
+  });
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${r2(minX)} ${r2(minY)} ${r2(wFt)} ${r2(hFt)}" width="${r2(wFt)}" height="${r2(hFt)}">${el.join('')}</svg>`;
+  return { svg, wFt, hFt };
+}
+
+const hexRgb = (hex) => {
+  const m = (hex || '').match(/#(..)(..)(..)/);
+  return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [120, 120, 120];
+};
+
+// Plan-view symbol for a fence STYLE, drawn with jsPDF primitives so the print
+// legend matches the on-screen FenceGlyph (board=solid, pickets=ticks,
+// mesh=diamond hatch, slat=dashed). `yBase` is the row's text baseline.
+function drawFenceSymbol(doc, style, hex, x, yBase, w) {
+  const [r, g, b] = hexRgb(hex);
+  doc.setDrawColor(r, g, b);
+  const y = yBase - 2.5;
+  if (style === 'pickets') {
+    doc.setLineWidth(0.7);
+    doc.line(x, y + 3, x + w, y + 3);
+    for (let px = x + 1; px <= x + w; px += 3) doc.line(px, y - 2.5, px, y + 3);
+  } else if (style === 'mesh') {
+    doc.setLineWidth(0.6);
+    for (let px = x; px < x + w - 1.4; px += 3) { doc.line(px, y + 3, px + 1.5, y - 3); doc.line(px + 1.5, y - 3, px + 3, y + 3); }
+    for (let px = x; px < x + w - 1.4; px += 3) { doc.line(px, y - 3, px + 1.5, y + 3); doc.line(px + 1.5, y + 3, px + 3, y - 3); }
+  } else if (style === 'slat') {
+    doc.setLineWidth(1.6); doc.setLineDashPattern([2.4, 1.7], 0); doc.line(x, y, x + w, y); doc.setLineDashPattern([], 0);
+  } else {
+    doc.setLineWidth(2.4); doc.line(x, y, x + w, y);
+  }
+}
+
+// A small north compass drawn with jsPDF primitives.
+function drawCompass(doc, cx, cy, r) {
+  doc.setFillColor(255, 255, 255); doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.8);
+  doc.circle(cx, cy, r, 'FD');
+  // needle: north half navy, south half light
+  doc.setFillColor(10, 37, 64);
+  doc.triangle(cx, cy - r * 0.66, cx - r * 0.26, cy, cx + r * 0.26, cy, 'F');
+  doc.setFillColor(148, 163, 184);
+  doc.triangle(cx, cy + r * 0.66, cx - r * 0.26, cy, cx + r * 0.26, cy, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(r * 0.7); doc.setTextColor(10, 37, 64);
+  doc.text('N', cx, cy - r - 2, { align: 'center' });
+}
+
+// Compass facing of a wall/fence (outward normal away from the group centroid).
+// North = up (−Y). Returns an 8-point label (N, NE, …).
+function facingOf(el, type, model) {
+  const a = el.a, b = el.b, len = dist(a, b) || 1;
+  const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  const cen = centroidOf((type === 'wall' ? model.walls : model.fences).flatMap((e) => [e.a, e.b]));
+  const sign = nx * (cen.x - mid.x) + ny * (cen.y - mid.y) < 0 ? 1 : -1;
+  const ox = nx * sign, oy = ny * sign;
+  let bearing = Math.atan2(ox, -oy) * 180 / Math.PI; if (bearing < 0) bearing += 360;
+  return ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(bearing / 45) % 8];
+}
+
+// Draw the legend / title block: title, quantities, and a door/window schedule.
+function drawLegend(doc, q, model, opts, x, y, w, h) {
+  const pad = 14, right = x + w - pad;
+  let cy = y + pad + 4;
+  doc.setDrawColor(148, 163, 184); doc.setLineWidth(1.2);
+  doc.roundedRect(x, y, w, h, 4, 4, 'S');
+
+  // title block with a teal accent rule
+  doc.setTextColor(10, 37, 64); doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
+  doc.text(opts.title || 'PlanForge Plan', x + pad, cy); cy += 6;
+  doc.setDrawColor(20, 184, 166); doc.setLineWidth(2); doc.line(x + pad, cy, x + pad + 34, cy); cy += 11;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(100, 116, 139);
+  doc.text(`Wall & Fence Layout  ·  ${new Date().toLocaleDateString()}`, x + pad, cy); cy += 16;
+
+  const section = (t) => { doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.text(t.toUpperCase(), x + pad, cy); cy += 4; doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.6); doc.line(x + pad, cy, right, cy); cy += 11; };
+  const row = (label, val, sym, indent = 0) => {
+    doc.setTextColor(10, 37, 64); doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+    if (sym) { drawFenceSymbol(doc, sym.style, sym.color, x + pad, cy - 3, 20); doc.text(label, x + pad + 26, cy); }
+    else doc.text(label, x + pad + indent, cy);
+    doc.setFont('helvetica', 'bold'); doc.text(String(val), right, cy, { align: 'right' });
+    doc.setDrawColor(232, 237, 243); doc.setLineWidth(0.4); doc.line(x + pad, cy + 4, right, cy + 4);
+    cy += 15;
+  };
+  // small grey note line (component breakdown), no rule
+  const note = (t) => { doc.setFont('helvetica', 'normal'); doc.setFontSize(7.6); doc.setTextColor(120, 132, 148); doc.text(t, x + pad + 26, cy); cy += 11; };
+
+  section('Quantities');
+  row('Wall linear ft', q.wallLF.toFixed(1));
+  if (q.wallExtLF > 0 || q.wallIntLF > 0) { doc.setFontSize(7.6); doc.setTextColor(120, 132, 148); doc.setFont('helvetica', 'normal'); doc.text(`exterior ${q.wallExtLF.toFixed(0)} ft  ·  interior ${q.wallIntLF.toFixed(0)} ft`, x + pad, cy); cy += 12; }
+  row('Doors / Windows', `${q.doorCount} / ${q.windowCount}`);
+  if (q.openingCount) row('Openings', q.openingCount);
+  cy += 4;
+
+  // ---- Fence schedule with per-type component breakdown ----
+  const fc = fenceComponents(model);
+  if (Object.keys(fc).length) {
+    section('Fence Schedule');
+    for (const v of Object.values(fc)) {
+      row(v.label, `${v.lf.toFixed(1)} ft`, v);
+      const parts = [`${v.posts} posts`, `${v.sections} sections`, `${v.comp.n} ${v.comp.label.toLowerCase()}`];
+      if (v.gates) parts.push(`${v.gates} gate${v.gates > 1 ? 's' : ''}`);
+      note(parts.join('  ·  '));
+    }
+    row('Total fence ft', q.fenceLF.toFixed(1));
+    row('Total posts / gates', `${q.postCount} / ${q.gateCount}`);
+    cy += 4;
+  }
+
+  // ---- Door & Window schedule (grouped by type + size) ----
+  const groups = new Map();
+  (model.openings || []).forEach((o) => {
+    const key = `${o.type}|${o.width}|${o.height}|${o.style || ''}`;
+    if (!groups.has(key)) groups.set(key, { type: o.type, w: o.width, ht: o.height, style: o.style, n: 0 });
+    groups.get(key).n++;
+  });
+  const list = [...groups.values()].sort((p, r) => p.type.localeCompare(r.type) || p.w - r.w);
+  if (list.length) {
+    section('Door & Window Schedule');
+    const marks = { door: 0, window: 0, opening: 0 };
+    const pre = { door: 'D', window: 'W', opening: 'O' };
+    doc.setFontSize(8); doc.setTextColor(120, 132, 148); doc.setFont('helvetica', 'bold');
+    doc.text('MARK', x + pad, cy); doc.text('SIZE', x + pad + 42, cy); doc.text('QTY', right, cy, { align: 'right' });
+    cy += 12;
+    for (const g of list) {
+      const mark = pre[g.type] + (++marks[g.type]);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(10, 37, 64);
+      doc.text(mark, x + pad, cy);
+      doc.setFont('helvetica', 'normal');
+      const size = `${formatFeetInches(g.w)} × ${formatFeetInches(g.ht)}`;
+      doc.text(size, x + pad + 42, cy);
+      doc.text('×' + g.n, right, cy, { align: 'right' });
+      doc.setTextColor(120, 132, 148); doc.setFontSize(7.5);
+      doc.text(g.type === 'window' && g.style ? `${g.type} · ${g.style}` : g.type, x + pad + 42, cy + 7);
+      doc.setDrawColor(232, 237, 243); doc.setLineWidth(0.4); doc.line(x + pad, cy + 10, right, cy + 10);
+      cy += 18;
+    }
+  }
+
+  cy = Math.max(cy + 6, y + h - 34);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120, 132, 148);
+  doc.text(`Units: ${opts.dimUnit === 'in' ? 'inches' : 'feet & inches'}  ·  Dimensions: ${opts.dimMode || 'exterior'}`, x + pad, cy); cy += 11;
+  doc.text(`North is up. Drawing fit to page — read dimensions.`, x + pad, cy);
+}
+
+export async function exportPlanPDF(model, opts = {}) {
+  const q = computeQuantities(model);
+  const { svg, wFt, hFt } = buildPlanSvg(model, opts);
+
+  const orientation = opts.orientation || 'landscape';
+  const format = opts.paper || 'letter';
+  const doc = new jsPDF({ orientation, unit: 'pt', format });
+  const PW = doc.internal.pageSize.getWidth();
+  const PH = doc.internal.pageSize.getHeight();
+  const M = 28;
+
+  const legendW = opts.includeLegend ? 196 : 0;
+  const gap = opts.includeLegend ? 14 : 0;
+  const areaX = M, areaY = M;
+  const areaW = PW - M * 2 - legendW - gap;
+  const areaH = PH - M * 2;
+
+  // drawing border
+  doc.setDrawColor(148, 163, 184); doc.setLineWidth(1.2);
+  doc.roundedRect(areaX, areaY, areaW, areaH, 4, 4, 'S');
+
+  // fit the plan (aspect-correct) inside the drawing area
+  const innerPad = 16;
+  const fitW = areaW - innerPad * 2, fitH = areaH - innerPad * 2;
+  const sc = Math.min(fitW / wFt, fitH / hFt);
+  const dw = wFt * sc, dh = hFt * sc;
+  const dx = areaX + innerPad + (fitW - dw) / 2;
+  const dy = areaY + innerPad + (fitH - dh) / 2;
+
+  const holder = document.createElement('div');
+  holder.style.cssText = 'position:fixed;left:-9999px;top:0;width:0;height:0;overflow:hidden';
+  holder.innerHTML = svg;
+  document.body.appendChild(holder);
+  try {
+    await svg2pdf(holder.querySelector('svg'), doc, { x: dx, y: dy, width: dw, height: dh });
+  } finally {
+    holder.remove();
+  }
+
+  // north compass in the top-right corner of the drawing area
+  drawCompass(doc, areaX + areaW - 26, areaY + 30, 14);
+
+  if (opts.includeLegend) {
+    drawLegend(doc, q, model, opts, PW - M - legendW, M, legendW, areaH);
+  }
+
+  if (opts.elevations && opts.elevations.length) {
+    await drawElevationsPage(doc, opts.elevations, model, opts, format, orientation);
+  }
+
+  if (opts.views3d && opts.views3d.length) {
+    draw3DViewsPage(doc, opts.views3d, opts.title, format, orientation);
+  }
+
+  doc.save((opts.fileName || 'planforge-plan') + '.pdf');
+}
+
+// Build a front-view (elevation) of one wall/fence as an SVG string in feet
+// coordinates, mirroring the on-screen elevation editor. svg2pdf scales it.
+function buildElevationSvg(el, type, model, opts) {
+  const isWall = type === 'wall';
+  const cl = (v, a, b) => Math.max(a, Math.min(b, v));
+  const L = dist(el.a, el.b);
+  const H = el.height || (isWall ? 8 : 6);
+  const items = isWall ? model.openings.filter((o) => o.wallId === el.id) : model.gates.filter((g) => g.fenceId === el.id);
+  const fmt = (v) => formatFeetInches(v, { unit: opts.dimUnit });
+  const padX = 1.9, padTop = Math.max(1.2, H * 0.18), padBot = 3.6;
+  const Wt = L + padX * 2, Ht = H + padTop + padBot;
+  const yG = padTop + H;
+  const Xs = (x) => r2(padX + x), Ys = (y) => r2(yG - y);
+  const SW = 0.03, e = [];
+  // dimension number sizes (already bumped 50% over the prior values)
+  const FS = { comp: 0.6, sill: 0.54, seg: 0.54, ovH: 0.66, ovW: 0.69 };
+  const txt = (x, y, t, fs, anchor = 'middle', bold = false, baseline = '') => `<text x="${r2(x)}" y="${r2(y)}" font-size="${fs}" fill="${NAVY}" font-family="Helvetica"${bold ? ' font-weight="bold"' : ''} text-anchor="${anchor}"${baseline ? ` dominant-baseline="${baseline}"` : ''}>${t}</text>`;
+  // a component dimension path: witness lines + dim line + ticks + label. dir 'h'
+  // (a,b are x, level `lvl` is the dim-line y, witness from edge y `wf`) or 'v'.
+  const compDim = (dir, a, b, lvl, wf, label, fs) => {
+    const tk2 = 0.12;
+    if (dir === 'h') {
+      e.push(`<line x1="${r2(a)}" y1="${r2(wf)}" x2="${r2(a)}" y2="${r2(lvl)}" stroke="${NAVY}" stroke-width="${SW * 0.4}"/>`);
+      e.push(`<line x1="${r2(b)}" y1="${r2(wf)}" x2="${r2(b)}" y2="${r2(lvl)}" stroke="${NAVY}" stroke-width="${SW * 0.4}"/>`);
+      e.push(`<line x1="${r2(a)}" y1="${r2(lvl)}" x2="${r2(b)}" y2="${r2(lvl)}" stroke="${NAVY}" stroke-width="${SW * 0.55}"/>`);
+      e.push(`<line x1="${r2(a)}" y1="${r2(lvl - tk2)}" x2="${r2(a)}" y2="${r2(lvl + tk2)}" stroke="${NAVY}" stroke-width="${SW * 0.55}"/>`);
+      e.push(`<line x1="${r2(b)}" y1="${r2(lvl - tk2)}" x2="${r2(b)}" y2="${r2(lvl + tk2)}" stroke="${NAVY}" stroke-width="${SW * 0.55}"/>`);
+      e.push(txt((a + b) / 2, lvl - 0.16, label, fs));
+    } else {
+      const right = lvl > wf;
+      e.push(`<line x1="${r2(wf)}" y1="${r2(a)}" x2="${r2(lvl)}" y2="${r2(a)}" stroke="${NAVY}" stroke-width="${SW * 0.4}"/>`);
+      e.push(`<line x1="${r2(wf)}" y1="${r2(b)}" x2="${r2(lvl)}" y2="${r2(b)}" stroke="${NAVY}" stroke-width="${SW * 0.4}"/>`);
+      e.push(`<line x1="${r2(lvl)}" y1="${r2(a)}" x2="${r2(lvl)}" y2="${r2(b)}" stroke="${NAVY}" stroke-width="${SW * 0.55}"/>`);
+      e.push(`<line x1="${r2(lvl - tk2)}" y1="${r2(a)}" x2="${r2(lvl + tk2)}" y2="${r2(a)}" stroke="${NAVY}" stroke-width="${SW * 0.55}"/>`);
+      e.push(`<line x1="${r2(lvl - tk2)}" y1="${r2(b)}" x2="${r2(lvl + tk2)}" y2="${r2(b)}" stroke="${NAVY}" stroke-width="${SW * 0.55}"/>`);
+      e.push(txt(lvl + (right ? 0.16 : -0.16), (a + b) / 2, label, fs, right ? 'start' : 'end', false, 'middle'));
+    }
+  };
+
+  e.push(`<line x1="${Xs(-0.4)}" y1="${yG}" x2="${Xs(L + 0.4)}" y2="${yG}" stroke="${NAVY}" stroke-width="${SW * 1.6}"/>`);
+  if (isWall) {
+    e.push(`<rect x="${Xs(0)}" y="${Ys(H)}" width="${r2(L)}" height="${r2(H)}" fill="#ffffff" stroke="${NAVY}" stroke-width="${SW * 1.4}"/>`);
+  } else {
+    const ft = FENCE_TYPES[el.fenceType] || FENCE_TYPES.wood; const col = el.color || ft.color;
+    e.push(`<rect x="${Xs(0)}" y="${Ys(H)}" width="${r2(L)}" height="${r2(H)}" fill="${col}" fill-opacity="${ft.style === 'mesh' ? 0.2 : 0.85}" stroke="${NAVY}" stroke-width="${SW}"/>`);
+    if (ft.style === 'slat' || ft.style === 'board' || ft.style === 'solid') for (let xf = 0.5; xf < L; xf += 0.5) e.push(`<line x1="${Xs(xf)}" y1="${Ys(H)}" x2="${Xs(xf)}" y2="${yG}" stroke="rgba(0,0,0,0.18)" stroke-width="${SW * 0.5}"/>`);
+    const postTop = el.postHeight ?? (H + 0.2);
+    for (const p of postsAlong({ x: 0, y: 0 }, { x: L, y: 0 }, el.postSpacing || 8)) e.push(`<rect x="${r2(padX + p.x - 0.12)}" y="${Ys(postTop)}" width="0.24" height="${r2(postTop)}" fill="#475569"/>`);
+  }
+
+  for (const it of items) {
+    const center = it.t * L, w = it.width, left = center - w / 2, right = center + w / 2;
+    const bottom = isWall && it.type === 'window' ? (it.sill ?? 3) : 0;
+    const top = isWall ? bottom + it.height : (it.height ?? H);
+    const accent = isWall ? (it.type === 'door' ? '#8a5a32' : '#2563eb') : NAVY;
+    e.push(`<rect x="${Xs(left)}" y="${Ys(top)}" width="${r2(w)}" height="${r2(top - bottom)}" fill="#ffffff"/>`);
+    if (isWall && it.type === 'window') {
+      e.push(`<rect x="${Xs(left)}" y="${Ys(top)}" width="${r2(w)}" height="${r2(top - bottom)}" fill="#eaf2fb" stroke="${accent}" stroke-width="${SW}"/>`);
+      const { V, H: Hb } = windowBars(it.style, it.grid);
+      V.forEach((b) => e.push(`<line x1="${r2(padX + left + b.at * w)}" y1="${Ys(top)}" x2="${r2(padX + left + b.at * w)}" y2="${Ys(bottom)}" stroke="${accent}" stroke-width="${SW * (b.major ? 1.2 : 0.7)}"/>`));
+      Hb.forEach((b) => { const yy = r2(yG - (bottom + b.at * (top - bottom))); e.push(`<line x1="${Xs(left)}" y1="${yy}" x2="${Xs(left + w)}" y2="${yy}" stroke="${accent}" stroke-width="${SW * (b.major ? 1.2 : 0.7)}"/>`); });
+      if (bottom > 0) compDim('v', Ys(bottom), Ys(0), Xs(left) - 0.45, Xs(left), fmt(bottom), FS.sill); // sill on the left
+    } else if (isWall && it.type === 'door') {
+      e.push(`<rect x="${Xs(left)}" y="${Ys(top)}" width="${r2(w)}" height="${r2(top - bottom)}" fill="#eef2f6" stroke="${accent}" stroke-width="${SW}"/>`);
+      e.push(`<rect x="${r2(padX + left + 0.1)}" y="${r2(Ys(top) + 0.1)}" width="${r2(w - 0.2)}" height="${r2(top - bottom - 0.2)}" fill="none" stroke="${accent}" stroke-width="${SW * 0.7}"/>`);
+    } else if (isWall) {
+      e.push(`<rect x="${Xs(left)}" y="${Ys(top)}" width="${r2(w)}" height="${r2(top - bottom)}" fill="none" stroke="${accent}" stroke-width="${SW}" stroke-dasharray="0.15 0.1"/>`);
+    } else {
+      e.push(`<rect x="${Xs(left)}" y="${Ys(top)}" width="${r2(w)}" height="${r2(top - bottom)}" fill="#9aa3ad" fill-opacity="0.85" stroke="${NAVY}" stroke-width="${SW}"/>`);
+      e.push(`<line x1="${Xs(left)}" y1="${Ys(bottom)}" x2="${Xs(left + w)}" y2="${Ys(top)}" stroke="${NAVY}" stroke-width="${SW * 0.8}"/>`);
+    }
+    compDim('h', Xs(left), Xs(right), Ys(top) - 0.45, Ys(top), fmt(w), FS.comp);            // width (above)
+    compDim('v', Ys(top), Ys(bottom), Xs(right) + 0.45, Xs(right), fmt(top - bottom), FS.comp); // height (right)
+  }
+
+  // overall height (right side)
+  e.push(`<line x1="${Xs(L + 0.7)}" y1="${Ys(0)}" x2="${Xs(L + 0.7)}" y2="${Ys(H)}" stroke="${NAVY}" stroke-width="${SW}"/>`);
+  e.push(txt(padX + L + 0.9, yG - H / 2, fmt(H), FS.ovH, 'start', true, 'middle'));
+
+  // distance string (stations at opening/gate edges + fence posts) and overall width
+  const segY = yG + 1.05, ovY = yG + 2.5, tk = 0.18;
+  const edges = new Set([0, L]);
+  items.forEach((it) => { const c = it.t * L, w = it.width; edges.add(cl(c - w / 2, 0, L)); edges.add(cl(c + w / 2, 0, L)); });
+  if (!isWall) postsAlong({ x: 0, y: 0 }, { x: L, y: 0 }, el.postSpacing || 8).forEach((p) => edges.add(+p.x.toFixed(2)));
+  const stations = [...edges].map((v) => +v.toFixed(2)).sort((a, b) => a - b).filter((v, i, a) => i === 0 || v - a[i - 1] > 0.05);
+  [0, L].forEach((s) => e.push(`<line x1="${Xs(s)}" y1="${yG}" x2="${Xs(s)}" y2="${r2(ovY + tk)}" stroke="${NAVY}" stroke-width="${SW * 0.5}" opacity="0.5"/>`));
+  e.push(`<line x1="${Xs(0)}" y1="${r2(segY)}" x2="${Xs(L)}" y2="${r2(segY)}" stroke="${NAVY}" stroke-width="${SW * 0.6}"/>`);
+  stations.forEach((s) => e.push(`<line x1="${Xs(s)}" y1="${r2(segY - tk)}" x2="${Xs(s)}" y2="${r2(segY + tk)}" stroke="${NAVY}" stroke-width="${SW * 0.6}"/>`));
+  for (let i = 0; i < stations.length - 1; i++) { const s0 = stations[i], s1 = stations[i + 1]; if (s1 - s0 < 0.05) continue; e.push(txt(padX + (s0 + s1) / 2, segY - 0.16, fmt(s1 - s0), FS.seg)); }
+  e.push(`<line x1="${Xs(0)}" y1="${r2(ovY)}" x2="${Xs(L)}" y2="${r2(ovY)}" stroke="${NAVY}" stroke-width="${SW * 0.9}"/>`);
+  [0, L].forEach((s) => e.push(`<line x1="${Xs(s)}" y1="${r2(ovY - tk)}" x2="${Xs(s)}" y2="${r2(ovY + tk)}" stroke="${NAVY}" stroke-width="${SW * 0.9}"/>`));
+  e.push(txt(padX + L / 2, ovY + 0.5, fmt(L), FS.ovW, 'middle', true));
+
+  return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${r2(Wt)} ${r2(Ht)}">${e.join('')}</svg>`, wFt: Wt, hFt: Ht };
+}
+
+// A page of selected elevations laid out in a grid, each captioned.
+async function drawElevationsPage(doc, elevations, model, opts, format, orientation) {
+  const built = [];
+  for (const selv of elevations) {
+    const el = selv.type === 'wall' ? model.walls.find((w) => w.id === selv.id) : model.fences.find((f) => f.id === selv.id);
+    if (!el) continue;
+    const label = `${selv.type === 'wall' ? 'Wall' : 'Fence'} — ${formatFeetInches(dist(el.a, el.b))}${selv.type === 'fence' ? ` · ${(FENCE_TYPES[el.fenceType] || {}).label || ''}` : ''}`;
+    built.push({ ...buildElevationSvg(el, selv.type, model, opts), label, facing: facingOf(el, selv.type, model) });
+  }
+  if (!built.length) return;
+
+  doc.addPage(format, orientation);
+  const PW = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight(), M = 28;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(10, 37, 64);
+  doc.text((opts.title || 'PlanForge Plan') + ' — Elevations', M, M + 12);
+  doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.8); doc.line(M, M + 20, PW - M, M + 20);
+
+  const cols = built.length > 2 ? 2 : 1;
+  const rows = Math.ceil(built.length / cols);
+  const gap = 18, top = M + 34, capH = 24;
+  const cellW = (PW - M * 2 - gap * (cols - 1)) / cols;
+  const cellH = (PH - top - M - gap * (rows - 1)) / rows;
+  for (let i = 0; i < built.length; i++) {
+    const v = built[i], r = Math.floor(i / cols), c = i % cols;
+    const x = M + c * (cellW + gap), y = top + r * (cellH + gap);
+    const availH = cellH - capH;
+    const sc = Math.min(cellW / v.wFt, availH / v.hFt);
+    const dw = v.wFt * sc, dh = v.hFt * sc;
+    const ix = x + (cellW - dw) / 2, iy = y + (availH - dh) / 2;
+    const holder = document.createElement('div');
+    holder.style.cssText = 'position:fixed;left:-9999px;top:0';
+    holder.innerHTML = v.svg;
+    document.body.appendChild(holder);
+    try { await svg2pdf(holder.querySelector('svg'), doc, { x: ix, y: iy, width: dw, height: dh }); } finally { holder.remove(); }
+    // caption: wall/fence title, then the facing orientation on the line below
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(10, 37, 64);
+    doc.text(v.label, x + cellW / 2, y + cellH - 12, { align: 'center' });
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(37, 99, 235);
+    doc.text('Faces ' + (FACING_NAMES[v.facing] || v.facing || ''), x + cellW / 2, y + cellH - 3, { align: 'center' });
+  }
+}
+
+const FACING_NAMES = { N: 'North', NE: 'Northeast', E: 'East', SE: 'Southeast', S: 'South', SW: 'Southwest', W: 'West', NW: 'Northwest' };
+
+// Second page: rendered 3D snapshots laid out in a grid, each captioned.
+function draw3DViewsPage(doc, views, title, format, orientation) {
+  doc.addPage(format, orientation);
+  const PW = doc.internal.pageSize.getWidth();
+  const PH = doc.internal.pageSize.getHeight();
+  const M = 28;
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(10, 37, 64);
+  doc.text((title || 'PlanForge Plan') + ' — 3D Views', M, M + 12);
+  doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.8);
+  doc.line(M, M + 20, PW - M, M + 20);
+
+  const cols = views.length <= 1 ? 1 : 2;
+  const rows = Math.ceil(views.length / cols);
+  const gap = 16;
+  const top = M + 34;
+  const cellW = (PW - M * 2 - gap * (cols - 1)) / cols;
+  const cellH = (PH - top - M - gap * (rows - 1)) / rows;
+  const capH = 16;                 // caption strip under each image
+
+  views.forEach((v, i) => {
+    const r = Math.floor(i / cols), c = i % cols;
+    const x = M + c * (cellW + gap), y = top + r * (cellH + gap);
+    const availH = cellH - capH;
+    const imgAspect = (v.w && v.h) ? v.w / v.h : 1.5;
+    let iw = cellW, ih = iw / imgAspect;
+    if (ih > availH) { ih = availH; iw = ih * imgAspect; }
+    const ix = x + (cellW - iw) / 2, iy = y + (availH - ih) / 2;
+    doc.addImage(v.dataUrl, 'PNG', ix, iy, iw, ih, undefined, 'FAST');
+    doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.8);
+    doc.rect(ix, iy, iw, ih);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(100, 116, 139);
+    doc.text(v.label, x + cellW / 2, y + cellH - 3, { align: 'center' });
+  });
+}
