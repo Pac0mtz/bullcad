@@ -247,6 +247,31 @@ const hexRgb = (hex) => {
   return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [120, 120, 120];
 };
 
+// Small mark icon for the door/window schedule (drawn with jsPDF primitives):
+// door = leaf + swing arc, window = framed pane with a mullion, opening = jambs.
+// `yBase` is the row text baseline; icon sits in a ~sz box above it.
+function drawOpeningSymbol(doc, type, x, yBase, sz = 12) {
+  doc.setLineWidth(0.7);
+  const cy = yBase - 2;            // vertical centre of the glyph
+  if (type === 'door') {
+    doc.setDrawColor(138, 90, 50); // door brown
+    const by = cy + sz / 2, top = cy - sz / 2, r = sz; // hinge at bottom-left
+    doc.line(x, by, x, top);       // door leaf (open, pointing up)
+    const seg = 7, pts = [];       // quarter-circle swing from open (up) to closed (right)
+    for (let i = 0; i <= seg; i++) { const a = (Math.PI / 2) * (1 - i / seg); pts.push([x + r * Math.cos(a), by - r * Math.sin(a)]); }
+    for (let i = 1; i < pts.length; i++) doc.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
+  } else if (type === 'window') {
+    doc.setDrawColor(37, 99, 235);
+    doc.rect(x, cy - sz / 2, sz, sz);                       // frame
+    doc.line(x + sz / 2, cy - sz / 2, x + sz / 2, cy + sz / 2); // mullion
+    doc.line(x, cy, x + sz, cy);                            // transom
+  } else { // opening (no door): two jambs
+    doc.setDrawColor(100, 116, 139);
+    doc.line(x, cy - sz / 2, x, cy + sz / 2);
+    doc.line(x + sz, cy - sz / 2, x + sz, cy + sz / 2);
+  }
+}
+
 // Plan-view symbol for a fence STYLE, drawn with jsPDF primitives so the print
 // legend matches the on-screen FenceGlyph (board=solid, pickets=ticks,
 // mesh=diamond hatch, slat=dashed). `yBase` is the row's text baseline.
@@ -355,19 +380,21 @@ function drawLegend(doc, q, model, opts, x, y, w, h) {
     section('Door & Window Schedule');
     const marks = { door: 0, window: 0, opening: 0 };
     const pre = { door: 'D', window: 'W', opening: 'O' };
+    const markX = x + pad + 20, sizeX = x + pad + 56; // leave room for the icon
     doc.setFontSize(8); doc.setTextColor(120, 132, 148); doc.setFont('helvetica', 'bold');
-    doc.text('MARK', x + pad, cy); doc.text('SIZE', x + pad + 42, cy); doc.text('QTY', right, cy, { align: 'right' });
+    doc.text('MARK', markX, cy); doc.text('SIZE', sizeX, cy); doc.text('QTY', right, cy, { align: 'right' });
     cy += 12;
     for (const g of list) {
       const mark = pre[g.type] + (++marks[g.type]);
+      drawOpeningSymbol(doc, g.type, x + pad, cy - 1, 12); // mark icon
       doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(10, 37, 64);
-      doc.text(mark, x + pad, cy);
+      doc.text(mark, markX, cy);
       doc.setFont('helvetica', 'normal');
       const size = `${formatFeetInches(g.w)} × ${formatFeetInches(g.ht)}`;
-      doc.text(size, x + pad + 42, cy);
+      doc.text(size, sizeX, cy);
       doc.text('×' + g.n, right, cy, { align: 'right' });
       doc.setTextColor(120, 132, 148); doc.setFontSize(7.5);
-      doc.text(g.type === 'window' && g.style ? `${g.type} · ${g.style}` : g.type, x + pad + 42, cy + 7);
+      doc.text(g.type === 'window' && g.style ? `${g.type} · ${g.style}` : g.type, sizeX, cy + 7);
       doc.setDrawColor(232, 237, 243); doc.setLineWidth(0.4); doc.line(x + pad, cy + 10, right, cy + 10);
       cy += 18;
     }

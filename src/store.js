@@ -73,6 +73,7 @@ export const useStore = create((set, get) => ({
   wallHeight: 8,
   wallColor: '#e2e8f0',
   wallMaterial: 'drywall',
+  detachCorner: false, // when on, dragging a corner moves only that wall (split the joint); Alt does this momentarily
   showRoomAreas: false, // overlay computed room areas on the 2D plan
 
   // ----- layer visibility (view state, not part of undo history) -----

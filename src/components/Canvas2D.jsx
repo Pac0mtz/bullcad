@@ -22,7 +22,7 @@ export default function Canvas2D() {
   const layerRef = useRef(null);
 
   const store = useStore();
-  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, labels, stairs, selection, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, layers } = store;
+  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, labels, stairs, selection, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, layers, detachCorner } = store;
   const rooms = useMemo(() => (showRoomAreas ? detectRooms(walls) : []), [showRoomAreas, walls]);
   const t = CANVAS_THEME[theme] || CANVAS_THEME.light;
 
@@ -359,9 +359,9 @@ export default function Canvas2D() {
       // resolve the joined corner once: every endpoint of this element type that
       // shares the dragged corner moves together (keeps rooms/runs connected)
       if (!d.joints) {
-        // Alt at grab time detaches just this corner; otherwise the whole joint
-        // (every segment sharing the corner) moves together
-        if (alt.current) {
+        // detach (split handle, Alt held, or toggle) moves just this corner;
+        // otherwise the whole joint moves together
+        if (d.solo || alt.current || detachCorner) {
           d.joints = [{ id: d.id, end: d.end }];
         } else {
           const o = d.origin || (list.find((e) => e.id === d.id) || {})[d.end] || raw;
@@ -622,18 +622,37 @@ export default function Canvas2D() {
             })}
           </Group>}
 
-          {/* selected wall endpoint handles */}
-          {selWall && ['a', 'b'].map((end) => (
-            <Circle key={end} x={selWall[end].x * scale} y={selWall[end].y * scale} radius={coarse ? 10 : 6}
-              fill="#fff" stroke={BLUE} strokeWidth={2} hitStrokeWidth={coarse ? 22 : 10}
-              onMouseDown={startHandle({ kind: 'wallEnd', id: selWall.id, end, origin: { ...selWall[end] } })}
-              onTouchStart={startHandle({ kind: 'wallEnd', id: selWall.id, end, origin: { ...selWall[end] } })} />
-          ))}
-          {selFence && ['a', 'b'].map((end) => (
-            <Circle key={end} x={selFence[end].x * scale} y={selFence[end].y * scale} radius={coarse ? 10 : 6}
-              fill="#fff" stroke={BLUE} strokeWidth={2} hitStrokeWidth={coarse ? 22 : 10}
-              onMouseDown={startHandle({ kind: 'fenceEnd', id: selFence.id, end, origin: { ...selFence[end] } })}
-              onTouchStart={startHandle({ kind: 'fenceEnd', id: selFence.id, end, origin: { ...selFence[end] } })} />
+          {/* selected wall/fence endpoint handles — round blue = move the whole
+              joined corner; amber diamond (only at shared corners, pulled into
+              the segment) = split off and move just this segment */}
+          {[[selWall, walls, 'wallEnd'], [selFence, fences, 'fenceEnd']].map(([segEl, list, kind]) => segEl && (
+            <React.Fragment key={kind}>
+              {['a', 'b'].map((end) => (
+                <Circle key={end} x={segEl[end].x * scale} y={segEl[end].y * scale} radius={coarse ? 10 : 6}
+                  fill="#fff" stroke={BLUE} strokeWidth={2} hitStrokeWidth={coarse ? 22 : 10}
+                  onMouseDown={startHandle({ kind, id: segEl.id, end, origin: { ...segEl[end] } })}
+                  onTouchStart={startHandle({ kind, id: segEl.id, end, origin: { ...segEl[end] } })} />
+              ))}
+              {['a', 'b'].map((end) => {
+                const pt = segEl[end];
+                const shared = list.some((e) => e.id !== segEl.id && (dist(e.a, pt) < 0.05 || dist(e.b, pt) < 0.05));
+                if (!shared) return null;
+                const other = end === 'a' ? 'b' : 'a';
+                const L = dist(pt, segEl[other]) || 1;
+                const D = (coarse ? 30 : 24) / view.k; // constant screen offset into the segment
+                const hx = pt.x * scale + (segEl[other].x - pt.x) / L * D;
+                const hy = pt.y * scale + (segEl[other].y - pt.y) / L * D;
+                const start = startHandle({ kind, id: segEl.id, end, origin: { ...pt }, solo: true });
+                const s = coarse ? 9 : 6.5;
+                const setCur = (c) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = c; };
+                return (
+                  <Group key={'sp' + end} x={hx} y={hy} onMouseDown={start} onTouchStart={start} onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
+                    <Line points={[0, -s, s, 0, 0, s, -s, 0]} closed fill="#fff" stroke="#f59e0b" strokeWidth={2} hitStrokeWidth={coarse ? 24 : 12} />
+                    <Line points={[-s * 0.4, 0, s * 0.4, 0]} stroke="#f59e0b" strokeWidth={1.5} listening={false} />
+                  </Group>
+                );
+              })}
+            </React.Fragment>
           ))}
 
           {/* room area labels */}
@@ -762,6 +781,15 @@ export default function Canvas2D() {
           </div>
         );
       })()}
+
+      {/* start-drawing prompt — tells you to tap/click to drop the first point */}
+      {['wall', 'fence', 'room'].includes(tool) && !draft && !measure.length && (
+        <div className="draw-hint">
+          {tool === 'room'
+            ? (coarse ? 'Tap one corner, then the opposite' : 'Click one corner, then the opposite')
+            : (coarse ? `Tap to start the ${tool} · tap each corner` : `Click to start the ${tool}`)}
+        </div>
+      )}
 
       <FenceLegend fences={fences} />
     </div>

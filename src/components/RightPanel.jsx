@@ -144,6 +144,7 @@ function SelectedProps() {
               <button className="btn ghost" style={{ width: '100%', background: 'var(--slate-bg)', color: 'var(--navy)' }}
                 onClick={() => applyWallStyleToAll(el.id)} title="Apply this wall's thickness, height, color and material to every wall">≡ Match all</button>
             </div>
+            <p className="empty-note" style={{ marginTop: 8 }}>Drag the round corner handle to move joined walls together; the amber ◆ splits off just this wall (or hold Alt).</p>
 
             <div className="prop-subhead">Dimensions</div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: 'var(--muted)', margin: '2px 0 10px' }}>
