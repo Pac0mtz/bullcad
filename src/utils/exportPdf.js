@@ -493,14 +493,30 @@ function buildElevationSvg(el, type, model, opts) {
     const accent = isWall ? (it.type === 'door' ? '#8a5a32' : '#2563eb') : NAVY;
     e.push(`<rect x="${Xs(left)}" y="${Ys(top)}" width="${r2(w)}" height="${r2(top - bottom)}" fill="#ffffff"/>`);
     if (isWall && it.type === 'window') {
-      e.push(`<rect x="${Xs(left)}" y="${Ys(top)}" width="${r2(w)}" height="${r2(top - bottom)}" fill="#eaf2fb" stroke="${accent}" stroke-width="${SW}"/>`);
+      const H = top - bottom, fw = Math.min(0.15, w * 0.1, H * 0.1);
+      const gL = left + fw, gW = w - 2 * fw, gTop = top - fw, gBot = bottom + fw, gH = gTop - gBot;
+      e.push(`<rect x="${Xs(left)}" y="${Ys(top)}" width="${r2(w)}" height="${r2(H)}" fill="#ffffff" stroke="${accent}" stroke-width="${SW}"/>`); // outer frame
+      e.push(`<rect x="${Xs(gL)}" y="${Ys(gTop)}" width="${r2(gW)}" height="${r2(gH)}" fill="#eaf2fb" stroke="${accent}" stroke-width="${r2(SW * 0.6)}"/>`); // glazing
+      e.push(`<polygon points="${Xs(gL)},${Ys(gBot + gH * 0.45)} ${Xs(gL + gW * 0.5)},${Ys(gTop)} ${Xs(gL + gW)},${Ys(gTop)} ${Xs(gL + gW)},${Ys(gTop - gH * 0.18)} ${Xs(gL)},${Ys(gBot + gH * 0.15)}" fill="#dbeafe" opacity="0.5"/>`); // sheen
       const { V, H: Hb } = windowBars(it.style, it.grid);
-      V.forEach((b) => e.push(`<line x1="${r2(padX + left + b.at * w)}" y1="${Ys(top)}" x2="${r2(padX + left + b.at * w)}" y2="${Ys(bottom)}" stroke="${accent}" stroke-width="${SW * (b.major ? 1.2 : 0.7)}"/>`));
-      Hb.forEach((b) => { const yy = r2(yG - (bottom + b.at * (top - bottom))); e.push(`<line x1="${Xs(left)}" y1="${yy}" x2="${Xs(left + w)}" y2="${yy}" stroke="${accent}" stroke-width="${SW * (b.major ? 1.2 : 0.7)}"/>`); });
+      V.forEach((b) => e.push(`<line x1="${Xs(gL + b.at * gW)}" y1="${Ys(gTop)}" x2="${Xs(gL + b.at * gW)}" y2="${Ys(gBot)}" stroke="${accent}" stroke-width="${r2(SW * (b.major ? 1.1 : 0.6))}"/>`));
+      Hb.forEach((b) => { const yy = Ys(gBot + b.at * gH); e.push(`<line x1="${Xs(gL)}" y1="${yy}" x2="${Xs(gL + gW)}" y2="${yy}" stroke="${accent}" stroke-width="${r2(SW * (b.major ? 1.1 : 0.6))}"/>`); });
+      e.push(`<rect x="${Xs(left - 0.12)}" y="${Ys(bottom)}" width="${r2(w + 0.24)}" height="${r2(0.14)}" fill="#ffffff" stroke="${accent}" stroke-width="${r2(SW * 0.7)}"/>`); // projecting sill
       if (bottom > 0) compDim('v', Ys(bottom), Ys(0), Xs(left) - 0.45, Xs(left), fmt(bottom), FS.sill); // sill on the left
     } else if (isWall && it.type === 'door') {
-      e.push(`<rect x="${Xs(left)}" y="${Ys(top)}" width="${r2(w)}" height="${r2(top - bottom)}" fill="#eef2f6" stroke="${accent}" stroke-width="${SW}"/>`);
-      e.push(`<rect x="${r2(padX + left + 0.1)}" y="${r2(Ys(top) + 0.1)}" width="${r2(w - 0.2)}" height="${r2(top - bottom - 0.2)}" fill="none" stroke="${accent}" stroke-width="${SW * 0.7}"/>`);
+      const H = top - bottom;
+      e.push(`<rect x="${Xs(left)}" y="${Ys(top)}" width="${r2(w)}" height="${r2(H)}" fill="#eef2f6" stroke="${accent}" stroke-width="${SW}"/>`); // slab
+      const m = Math.min(0.2, w * 0.16), rail = Math.max(0.12, H * 0.07), innerW = w - 2 * m;
+      const splitF = bottom + rail + (H - 2 * rail) * 0.42;
+      const panel = (pBot, pTop) => {
+        e.push(`<rect x="${Xs(left + m)}" y="${Ys(pTop)}" width="${r2(innerW)}" height="${r2(pTop - pBot)}" fill="#ffffff" stroke="${accent}" stroke-width="${r2(SW * 0.7)}"/>`);
+        e.push(`<rect x="${Xs(left + m + 0.06)}" y="${Ys(pTop - 0.06)}" width="${r2(innerW - 0.12)}" height="${r2(pTop - pBot - 0.12)}" fill="none" stroke="${accent}" stroke-width="${r2(SW * 0.5)}" opacity="0.6"/>`);
+      };
+      panel(splitF + rail / 2, top - rail);    // top panel
+      panel(bottom + rail, splitF - rail / 2); // bottom panel
+      const latF = (it.hinge || 'left') === 'left' ? left + w - m : left + m, dir = (it.hinge || 'left') === 'left' ? -1 : 1, ly = bottom + H * 0.48;
+      e.push(`<circle cx="${Xs(latF)}" cy="${Ys(ly)}" r="${r2(0.07)}" fill="${accent}"/>`);
+      e.push(`<line x1="${Xs(latF)}" y1="${Ys(ly)}" x2="${Xs(latF + dir * 0.25)}" y2="${Ys(ly)}" stroke="${accent}" stroke-width="${r2(SW * 1.3)}" stroke-linecap="round"/>`);
     } else if (isWall) {
       e.push(`<rect x="${Xs(left)}" y="${Ys(top)}" width="${r2(w)}" height="${r2(top - bottom)}" fill="none" stroke="${accent}" stroke-width="${SW}" stroke-dasharray="0.15 0.1"/>`);
     } else {

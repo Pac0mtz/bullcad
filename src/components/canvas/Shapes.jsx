@@ -143,7 +143,7 @@ export function WallShape({ wall, scale, selected, onSelect, palette = DEFAULT_P
   const fill = selected ? palette.wallLineSel : palette.wallLine;
   const pts = [a.x * scale, a.y * scale, b.x * scale, b.y * scale];
   return (
-    <Group onMouseDown={(e) => onSelect(e)}>
+    <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)}>
       <Line points={pts} stroke={fill} strokeWidth={th} lineCap="square"
         hitStrokeWidth={Math.max(16, th)} />
     </Group>
@@ -173,7 +173,7 @@ export function OpeningShape({ op, wall, scale, selected, onSelect, palette = DE
   const projPx = proj ? (WINDOW_STYLES[op.style].depth || 1.5) * scale * oy : 0;
 
   return (
-    <Group x={center.x * scale + offX} y={center.y * scale + offY} rotation={angDeg} onMouseDown={(e) => onSelect(e)}>
+    <Group x={center.x * scale + offX} y={center.y * scale + offY} rotation={angDeg} onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)}>
       {/* hit area */}
       <Rect x={-w / 2} y={-th} width={w} height={th * 2} fill="transparent" />
       {/* cut the wall: masking band painted in the canvas background color */}
@@ -237,7 +237,7 @@ export function FenceShape({ fence, scale, selected, onSelect, palette = DEFAULT
   });
   const ps = Math.max(3, 0.45 * scale);
   return (
-    <Group onMouseDown={(e) => onSelect(e)}>
+    <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)}>
       <Line points={pts} stroke={col} strokeWidth={selected ? 5 : 3.5} lineCap="round"
         dash={dash} hitStrokeWidth={14} />
       {selected && <Line points={pts} stroke={BLUE} strokeWidth={1.5} lineCap="round" dash={[6, 5]} />}
@@ -267,7 +267,7 @@ export function GateShape({ gate, fence, scale, selected, onSelect, palette = DE
   const sw = swingGeom(w, inward, gate.hinge, gate.swing);
   const d = sw.d;
   return (
-    <Group x={center.x * scale} y={center.y * scale} rotation={angDeg} onMouseDown={(e) => onSelect(e)}>
+    <Group x={center.x * scale} y={center.y * scale} rotation={angDeg} onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)}>
       <Rect x={-w / 2} y={-Math.max(8, w * 0.5)} width={w * 1.1} height={Math.max(16, w)} fill="transparent" />
       {/* gap — painted in canvas bg so the fence reads as broken here */}
       <Line points={[-w / 2, 0, w / 2, 0]} stroke={palette.opMask} strokeWidth={5} />
@@ -326,17 +326,17 @@ export function StairShape({ stair, scale, selected, onSelect, onWidthDown, onRu
   const setCur = (c) => (e) => { const s = e.target.getStage(); if (s) s.container().style.cursor = c; };
   const Handle = ({ at, down, circle }) => (
     <Group x={at.x * scale} y={at.y * scale} scaleX={inv} scaleY={inv} rotation={-(stair.rotation || 0)}
-      onMouseDown={down} onMouseEnter={setCur(circle ? 'grab' : 'nwse-resize')} onMouseLeave={setCur('')}>
+      onMouseDown={down} onTouchStart={down} onMouseEnter={setCur(circle ? 'grab' : 'nwse-resize')} onMouseLeave={setCur('')}>
       {circle
-        ? <Circle radius={5.5} fill="#fff" stroke={BLUE} strokeWidth={2} />
-        : <Rect x={-5} y={-5} width={10} height={10} cornerRadius={2} fill="#fff" stroke={BLUE} strokeWidth={2} />}
+        ? <Circle radius={5.5} fill="#fff" stroke={BLUE} strokeWidth={2} hitStrokeWidth={22} />
+        : <Rect x={-5} y={-5} width={10} height={10} cornerRadius={2} fill="#fff" stroke={BLUE} strokeWidth={2} hitStrokeWidth={22} />}
     </Group>
   );
   const ax = g.arrow && P(g.arrow.from);
   return (
     <Group x={stair.x * scale} y={stair.y * scale} rotation={stair.rotation || 0}>
       <Line points={g.outline.flatMap(P)} closed stroke={STAIRLINE} strokeWidth={selected ? 1.6 : 1.3}
-        fill={palette.opMask} hitStrokeWidth={6} onMouseDown={onSelect} />
+        fill={palette.opMask} hitStrokeWidth={6} onMouseDown={onSelect} onTouchStart={onSelect} />
       {g.treads.map((t, i) => (
         <Line key={i} points={t.poly.flatMap(P)} closed stroke={STAIRLINE} strokeWidth={0.9}
           fill={t.landing ? 'rgba(100,116,139,0.12)' : 'transparent'} listening={false} />
@@ -390,11 +390,11 @@ export function LabelShape({ label, scale, selected, onPillDown, onAnchorDown, z
         strokeWidth={1.5} strokeScaleEnabled={false} listening={false} />
       {selected && (
         <Circle x={ax} y={ay} radius={5} fill="#fff" stroke={BLUE} strokeWidth={2}
-          onMouseDown={onAnchorDown} onMouseEnter={setCur('move')} onMouseLeave={setCur('')} />
+          onMouseDown={onAnchorDown} onTouchStart={onAnchorDown} onMouseEnter={setCur('move')} onMouseLeave={setCur('')} />
       )}
       {/* draggable pill (constant screen size) */}
       <Group x={px} y={py} scaleX={inv} scaleY={inv}
-        onMouseDown={onPillDown} onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
+        onMouseDown={onPillDown} onTouchStart={onPillDown} onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
         <Rect x={-w / 2} y={-hh / 2} width={w} height={hh} cornerRadius={5} fill="#fff"
           stroke={selected ? BLUE : borderColor} strokeWidth={selected ? 2 : 1.5}
           shadowColor="#0a2540" shadowBlur={3} shadowOpacity={0.16} />

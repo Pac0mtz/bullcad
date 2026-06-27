@@ -93,8 +93,8 @@ export default function ElevationCanvas() {
   };
 
   const C = useMemo(() => theme === 'dark'
-    ? { bg: '#0b1220', grid: '#1b2740', body: '#16202f', line: '#9fb1c6', dim: '#8aa0b8', glass: '#13314d', mask: '#0b1220' }
-    : { bg: '#f6f8fb', grid: '#e6ecf3', body: '#ffffff', line: '#0a2540', dim: '#5b7088', glass: '#eaf2fb', mask: '#f6f8fb' }, [theme]);
+    ? { bg: '#0b1220', grid: '#1b2740', body: '#16202f', line: '#9fb1c6', dim: '#8aa0b8', glass: '#13314d', glass2: '#1c4063', mask: '#0b1220', frame: '#2a3b52', panel: '#1b2a3d' }
+    : { bg: '#f6f8fb', grid: '#e6ecf3', body: '#ffffff', line: '#0a2540', dim: '#5b7088', glass: '#eaf2fb', glass2: '#dbeafe', mask: '#f6f8fb', frame: '#ffffff', panel: '#eef2f7' }, [theme]);
 
   const isWall = target?.type === 'wall';
   const el = isWall ? walls.find((w) => w.id === target?.id) : fences.find((f) => f.id === target?.id);
@@ -299,15 +299,37 @@ const OpeningSymbol = React.memo(function OpeningSymbol({ it, isWall, left, righ
   const parts = [<Rect key="mask" x={x} y={y} width={w} height={h} fill={C.mask} listening={false} />];
 
   if (isWall && it.type === 'window') {
-    parts.push(<Rect key="g" x={x} y={y} width={w} height={h} fill={C.glass} stroke={accent} strokeWidth={1.5} strokeScaleEnabled={false} listening={false} />);
+    const fw = Math.max(2.5, Math.min(7, w * 0.12, h * 0.12)); // frame width (px)
+    const gx = x + fw, gy = y + fw, gw = w - 2 * fw, gh = h - 2 * fw;
+    // outer frame
+    parts.push(<Rect key="of" x={x} y={y} width={w} height={h} fill={C.frame} stroke={accent} strokeWidth={1.6} cornerRadius={1} strokeScaleEnabled={false} listening={false} />);
+    // glazing with a soft diagonal sheen (two stops faked by a lighter triangle)
+    parts.push(<Rect key="g" x={gx} y={gy} width={gw} height={gh} fill={C.glass} stroke={accent} strokeWidth={0.8} strokeScaleEnabled={false} listening={false} />);
+    parts.push(<Line key="sheen" points={[gx, gy + gh * 0.55, gx + gw * 0.5, gy, gx + gw, gy, gx + gw, gy + gh * 0.18, gx, gy + gh * 0.85]} closed fill={C.glass2} opacity={0.45} listening={false} />);
+    // muntins / mullions mapped into the glazed area
     const { V, H } = windowBars(it.style, it.grid);
-    V.forEach((b, i) => parts.push(<Line key={'v' + i} points={[x + b.at * w, y, x + b.at * w, y + h]} stroke={accent} strokeWidth={b.major ? 1.5 : 0.8} strokeScaleEnabled={false} listening={false} />));
-    H.forEach((b, i) => parts.push(<Line key={'h' + i} points={[x, y + b.at * h, x + w, y + b.at * h]} stroke={accent} strokeWidth={b.major ? 1.5 : 0.8} strokeScaleEnabled={false} listening={false} />));
+    V.forEach((b, i) => parts.push(<Line key={'v' + i} points={[gx + b.at * gw, gy, gx + b.at * gw, gy + gh]} stroke={accent} strokeWidth={b.major ? 1.6 : 0.8} strokeScaleEnabled={false} listening={false} />));
+    H.forEach((b, i) => parts.push(<Line key={'h' + i} points={[gx, gy + b.at * gh, gx + gw, gy + b.at * gh]} stroke={accent} strokeWidth={b.major ? 1.6 : 0.8} strokeScaleEnabled={false} listening={false} />));
+    // projecting sill ledge under the window
+    parts.push(<Rect key="sill" x={x - 3} y={y + h - 1} width={w + 6} height={3.5} fill={C.frame} stroke={accent} strokeWidth={1} cornerRadius={0.5} strokeScaleEnabled={false} listening={false} />);
   } else if (isWall && it.type === 'door') {
-    parts.push(<Rect key="d" x={x} y={y} width={w} height={h} fill={C.glass} stroke={accent} strokeWidth={1.5} strokeScaleEnabled={false} listening={false} />);
-    parts.push(<Rect key="p" x={x + 4} y={y + 4} width={w - 8} height={h - 8} stroke={accent} strokeWidth={0.8} strokeScaleEnabled={false} listening={false} />);
-    const knobSide = (it.hinge || 'left') === 'left' ? x + w - 8 : x + 8;
-    parts.push(<Circle key="k" x={knobSide} y={y + h / 2} radius={2} fill={accent} listening={false} />);
+    // slab + frame
+    parts.push(<Rect key="d" x={x} y={y} width={w} height={h} fill={C.frame} stroke={accent} strokeWidth={1.6} strokeScaleEnabled={false} listening={false} />);
+    const m = Math.max(3, Math.min(8, w * 0.16)); // stile/rail margin
+    const rail = Math.max(3, h * 0.07);
+    const innerW = w - 2 * m, splitY = y + rail + (h - 2 * rail) * 0.42;
+    // two raised panels (top smaller, bottom larger) with a bevel inset
+    const panel = (py, ph, key) => {
+      parts.push(<Rect key={key} x={x + m} y={py} width={innerW} height={ph} fill={C.panel} stroke={accent} strokeWidth={1} strokeScaleEnabled={false} listening={false} />);
+      parts.push(<Rect key={key + 'b'} x={x + m + 3} y={py + 3} width={innerW - 6} height={ph - 6} stroke={accent} strokeWidth={0.6} opacity={0.6} strokeScaleEnabled={false} listening={false} />);
+    };
+    panel(y + rail, splitY - (y + rail) - rail / 2, 'pt');
+    panel(splitY + rail / 2, (y + h - rail) - (splitY + rail / 2), 'pb');
+    // lever handle + rosette on the latch side
+    const lat = (it.hinge || 'left') === 'left' ? x + w - m - 1 : x + m + 1;
+    const dir = (it.hinge || 'left') === 'left' ? -1 : 1;
+    parts.push(<Circle key="ros" x={lat} y={y + h * 0.52} radius={2.2} fill={accent} listening={false} />);
+    parts.push(<Line key="lev" points={[lat, y + h * 0.52, lat + dir * 7, y + h * 0.52]} stroke={accent} strokeWidth={2} lineCap="round" listening={false} />);
   } else if (isWall) {
     parts.push(<Rect key="o" x={x} y={y} width={w} height={h} stroke={accent} strokeWidth={1.2} dash={[5, 4]} strokeScaleEnabled={false} listening={false} />);
   } else {

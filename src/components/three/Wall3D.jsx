@@ -51,7 +51,7 @@ function Window3D({ o, th, selected, onSelect }) {
     <group position={[o.c, 0, 0]} onClick={click}>
       {/* glass pane (recessed) */}
       <Box x={0} y={cy} w={innerW} h={innerH} depth={0.06} color={GLASS}
-        opacity={0.4} roughness={0.05} metalness={0.25} />
+        opacity={0.32} roughness={0.04} metalness={0.55} />
       {/* outer frame: top / bottom / left / right — hinge side rendered thicker */}
       <Box x={0} y={sill + h - fr / 2} w={w} h={hinge === 'top' ? fr * 1.7 : fr} depth={frameZ} color={fc} emissive={em} roughness={0.6} />
       <Box x={0} y={sill + fr / 2} w={w} h={fr} depth={frameZ} color={fc} emissive={em} roughness={0.6} />
@@ -72,7 +72,7 @@ function Window3D({ o, th, selected, onSelect }) {
 }
 
 // Glass material shared by the projecting windows.
-const glassProps = { color: GLASS, transparent: true, opacity: 0.4, roughness: 0.05, metalness: 0.25 };
+const glassProps = { color: GLASS, transparent: true, opacity: 0.32, roughness: 0.04, metalness: 0.55 };
 
 // A glazed panel between two x/z points (used for the angled bay sections).
 function GlassPanel({ p0, p1, cy, h, frameColor, em }) {
@@ -128,11 +128,11 @@ function Garden3D({ o, outward, selected, onSelect }) {
   return (
     <group position={[o.c, 0, 0]} onClick={click}>
       {/* glazing: front, two sides, sloped-flat roof, mid shelf */}
-      <Box x={0} y={cy} w={w} h={h} depth={0.05} z={d} color={GLASS} opacity={0.4} roughness={0.05} metalness={0.25} />
-      <Box x={-w / 2} y={cy} w={0.05} h={h} depth={gd} z={zc} color={GLASS} opacity={0.4} roughness={0.05} metalness={0.25} />
-      <Box x={w / 2} y={cy} w={0.05} h={h} depth={gd} z={zc} color={GLASS} opacity={0.4} roughness={0.05} metalness={0.25} />
-      <Box x={0} y={sill + h} w={w} h={0.06} depth={gd} z={zc} color={GLASS} opacity={0.35} roughness={0.05} metalness={0.25} />
-      <Box x={0} y={sill + h * 0.5} w={w * 0.94} h={0.05} depth={gd * 0.9} z={zc} color={GLASS} opacity={0.35} roughness={0.05} metalness={0.25} />
+      <Box x={0} y={cy} w={w} h={h} depth={0.05} z={d} color={GLASS} opacity={0.32} roughness={0.04} metalness={0.55} />
+      <Box x={-w / 2} y={cy} w={0.05} h={h} depth={gd} z={zc} color={GLASS} opacity={0.32} roughness={0.04} metalness={0.55} />
+      <Box x={w / 2} y={cy} w={0.05} h={h} depth={gd} z={zc} color={GLASS} opacity={0.32} roughness={0.04} metalness={0.55} />
+      <Box x={0} y={sill + h} w={w} h={0.06} depth={gd} z={zc} color={GLASS} opacity={0.3} roughness={0.04} metalness={0.55} />
+      <Box x={0} y={sill + h * 0.5} w={w * 0.94} h={0.05} depth={gd * 0.9} z={zc} color={GLASS} opacity={0.3} roughness={0.04} metalness={0.55} />
       {/* base, header and corner posts */}
       <Box x={0} y={sill - 0.05} w={w + 0.2} h={0.16} depth={gd + 0.2} z={zc} color={TRIM} roughness={0.85} />
       <Box x={0} y={sill + h + 0.06} w={w + 0.2} h={0.16} depth={gd + 0.2} z={zc} color={fc} emissive={em} roughness={0.6} />
@@ -164,8 +164,18 @@ function Door3D({ o, th, selected, onSelect }) {
       {/* recessed panel detail */}
       <Box x={0} y={leafH * 0.66} w={leafW * 0.62} h={leafH * 0.28} depth={Math.min(0.2, th * 0.7)} color="#7f8ea3" roughness={0.7} />
       <Box x={0} y={leafH * 0.28} w={leafW * 0.62} h={leafH * 0.32} depth={Math.min(0.2, th * 0.7)} color="#7f8ea3" roughness={0.7} />
-      {/* handle */}
-      <Box x={leafW * 0.38} y={leafH * 0.45} w={0.18} h={0.18} depth={th + 0.18} color={HANDLE} roughness={0.3} metalness={0.7} />
+      {/* lever handle + rosette on the latch side (opposite the hinge) */}
+      {(() => {
+        const lx = (o.hinge || 'left') === 'left' ? leafW * 0.40 : -leafW * 0.40;
+        const dir = (o.hinge || 'left') === 'left' ? -1 : 1; // lever points toward the hinge
+        const hz = Math.min(0.18, th * 0.6) + 0.12;
+        return (
+          <>
+            <Box x={lx} y={leafH * 0.46} w={0.12} h={0.12} depth={hz} color={HANDLE} roughness={0.22} metalness={0.85} />
+            <Box x={lx + dir * 0.11} y={leafH * 0.46} w={0.22} h={0.055} depth={hz + 0.05} color={HANDLE} roughness={0.22} metalness={0.85} />
+          </>
+        );
+      })()}
     </group>
   );
 }

@@ -38,6 +38,7 @@ export default function Canvas2D() {
   const space = useRef(false);
   const shift = useRef(false);
   const pan = useRef(null);
+  const coarse = useMemo(() => typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches, []);
 
   // ---- size to container ----
   useEffect(() => {
@@ -56,6 +57,47 @@ export default function Canvas2D() {
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+  }, []);
+
+  // ---- touch: one-finger pan via Konva's Stage events (see onTouch* below);
+  // two-finger pinch-zoom via a native listener (Konva drops multi-touch moves).
+  const touch = useRef(null);   // single-finger pan state
+  const pinch = useRef(null);   // two-finger pinch state
+  useEffect(() => {
+    const el = stageRef.current?.container();
+    if (!el) return;
+    const D = (a, b) => Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY) || 1;
+    const C = (a, b) => ({ x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 });
+    const onStart = (e) => {
+      if (e.touches.length === 2) { const m = C(e.touches[0], e.touches[1]); pinch.current = { dist: D(e.touches[0], e.touches[1]), cx: m.x, cy: m.y }; touch.current = null; e.preventDefault(); }
+    };
+    const onMove = (e) => {
+      if (e.touches.length !== 2 || !pinch.current) return;
+      e.preventDefault();
+      const r = el.getBoundingClientRect(), p = pinch.current;
+      const dist = D(e.touches[0], e.touches[1]), m = C(e.touches[0], e.touches[1]);
+      // capture ratio + previous centre BEFORE the (batched) state update — p is
+      // mutated synchronously below, so the updater must not read it
+      const ratio = dist / p.dist, pcx = p.cx, pcy = p.cy, mx = m.x, my = m.y;
+      setView((v) => {
+        const Wx = (pcx - r.left - v.x) / v.k, Wy = (pcy - r.top - v.y) / v.k;
+        const k1 = Math.max(0.2, Math.min(5, v.k * ratio));
+        return { k: k1, x: (mx - r.left) - Wx * k1, y: (my - r.top) - Wy * k1 };
+      });
+      p.dist = dist; p.cx = m.x; p.cy = m.y;
+    };
+    const onEnd = (e) => { if (e.touches.length < 2) pinch.current = null; };
+    const opt = { passive: false };
+    el.addEventListener('touchstart', onStart, opt);
+    el.addEventListener('touchmove', onMove, opt);
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart, opt);
+      el.removeEventListener('touchmove', onMove, opt);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
   }, []);
 
   // reset draft/measure when tool changes
@@ -162,11 +204,17 @@ export default function Canvas2D() {
     };
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
-    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+    window.addEventListener('touchend', up);
+    window.addEventListener('touchcancel', up);
+    return () => {
+      window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
+      window.removeEventListener('touchend', up); window.removeEventListener('touchcancel', up);
+    };
   }, []);
 
   const onClick = (e) => {
-    if (space.current || e.evt.button !== 0) return;
+    // allow touch taps (button is undefined); block only real non-left mouse buttons
+    if (space.current || (e.evt.button != null && e.evt.button !== 0)) return;
     const raw = getFeet();
     if (!raw) return;
 
@@ -214,6 +262,39 @@ export default function Canvas2D() {
   };
 
   const onDblClick = () => { if (tool === 'wall' || tool === 'fence') setDraft(null); };
+
+  // single-finger pan (Konva Stage touch events); a small move stays a tap so
+  // Konva still fires onTap → place/select
+  const onTouchStart = (e) => {
+    if (drag.current) return; // a handle started a drag — don't begin a pan
+    if (e.evt.touches.length === 1 && !pinch.current) {
+      const t = e.evt.touches[0];
+      touch.current = { mode: null, sx: t.clientX, sy: t.clientY, lx: t.clientX, ly: t.clientY };
+    }
+  };
+  const onTouchMove = (e) => {
+    // dragging a resize/move handle takes priority over pan
+    if (drag.current) { e.evt.preventDefault(); const raw = getFeet(); if (raw) handleDragMove(raw); return; }
+    if (pinch.current) return; // two-finger pinch owns the gesture
+    const c = touch.current, ts = e.evt.touches; if (!c || ts.length !== 1) return;
+    const t = ts[0];
+    if (c.mode === null && Math.hypot(t.clientX - c.sx, t.clientY - c.sy) > 8) c.mode = 'pan';
+    if (c.mode === 'pan') {
+      e.evt.preventDefault();
+      const dx = t.clientX - c.lx, dy = t.clientY - c.ly; // capture before mutating c
+      setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
+      c.lx = t.clientX; c.ly = t.clientY;
+    }
+  };
+  const onTouchEnd = (e) => {
+    if (e.evt.touches.length > 0) return;
+    touch.current = null;
+    if (drag.current) { // commit the handle drag (mirror the window mouseup)
+      if (drag.current.moved && drag.current.before) useStore.getState().pushPast(drag.current.before);
+      drag.current = null;
+      setGuides([]);
+    }
+  };
 
   const onWheel = (e) => {
     e.evt.preventDefault();
@@ -335,7 +416,7 @@ export default function Canvas2D() {
     if (!pts.length) { setView({ x: size.w / 2, y: size.h / 2, k: 1 }); return; }
     const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
     const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-    const pad = 60;
+    const pad = size.w < 600 ? 24 : 60; // tighter margins on phones so more of the plan shows
     const bw = (maxX - minX) * scale || 1, bh = (maxY - minY) * scale || 1;
     const k = Math.min((size.w - pad * 2) / bw, (size.h - pad * 2) / bh, 3);
     const cx = ((minX + maxX) / 2) * scale, cy = ((minY + maxY) / 2) * scale;
@@ -394,7 +475,7 @@ export default function Canvas2D() {
     [fences, fenceJustify, fenceCentroid]);
 
   return (
-    <div ref={wrapRef} style={{ position: 'absolute', inset: 0, cursor: (space.current || tool === 'pan') ? 'grab' : tool === 'zoom' ? 'zoom-in' : tool === 'select' ? 'default' : 'crosshair' }}>
+    <div ref={wrapRef} style={{ position: 'absolute', inset: 0, touchAction: 'none', cursor: (space.current || tool === 'pan') ? 'grab' : tool === 'zoom' ? 'zoom-in' : tool === 'select' ? 'default' : 'crosshair' }}>
       <Stage
         ref={stageRef}
         width={size.w}
@@ -407,7 +488,11 @@ export default function Canvas2D() {
         onMouseMove={onMouseMove}
         onClick={onClick}
         onDblClick={onDblClick}
+        onTap={onClick}
         onWheel={onWheel}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
         style={{ background: t.stageBg }}
       >
         <Layer ref={layerRef} listening={true}>
@@ -489,14 +574,16 @@ export default function Canvas2D() {
 
           {/* selected wall endpoint handles */}
           {selWall && ['a', 'b'].map((end) => (
-            <Circle key={end} x={selWall[end].x * scale} y={selWall[end].y * scale} radius={6}
-              fill="#fff" stroke={BLUE} strokeWidth={2}
-              onMouseDown={startHandle({ kind: 'wallEnd', id: selWall.id, end })} />
+            <Circle key={end} x={selWall[end].x * scale} y={selWall[end].y * scale} radius={coarse ? 10 : 6}
+              fill="#fff" stroke={BLUE} strokeWidth={2} hitStrokeWidth={coarse ? 22 : 10}
+              onMouseDown={startHandle({ kind: 'wallEnd', id: selWall.id, end })}
+              onTouchStart={startHandle({ kind: 'wallEnd', id: selWall.id, end })} />
           ))}
           {selFence && ['a', 'b'].map((end) => (
-            <Circle key={end} x={selFence[end].x * scale} y={selFence[end].y * scale} radius={6}
-              fill="#fff" stroke={BLUE} strokeWidth={2}
-              onMouseDown={startHandle({ kind: 'fenceEnd', id: selFence.id, end })} />
+            <Circle key={end} x={selFence[end].x * scale} y={selFence[end].y * scale} radius={coarse ? 10 : 6}
+              fill="#fff" stroke={BLUE} strokeWidth={2} hitStrokeWidth={coarse ? 22 : 10}
+              onMouseDown={startHandle({ kind: 'fenceEnd', id: selFence.id, end })}
+              onTouchStart={startHandle({ kind: 'fenceEnd', id: selFence.id, end })} />
           ))}
 
           {/* room area labels */}

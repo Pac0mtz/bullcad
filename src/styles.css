@@ -620,8 +620,10 @@ kbd {
     left: 50%; right: auto; transform: translateX(-50%);
     bottom: 18px; font-size: 11px; padding: 6px 12px;
   }
-  .fence-legend { bottom: 66px; right: 14px; padding: 8px 10px; min-width: 0; }
-  .compass-control { top: 10px; left: 10px; }
+  .fence-legend { bottom: 66px; right: 12px; padding: 7px 9px; min-width: 0; opacity: 0.96; }
+  .fence-legend .fl-title { font-size: 8.5px; margin-bottom: 4px; }
+  .fence-legend .fl-row { font-size: 11px; gap: 7px; padding: 1px 0; }
+  .compass-control { top: 10px; left: 10px; transform: scale(0.82); transform-origin: top left; }
   .float-controls { top: 10px; right: 10px; }
 }
 
