@@ -500,7 +500,8 @@ export default function Canvas2D() {
   // building center — tells interior from exterior for dimensioning + alignment
   const wallCentroid = useMemo(() => centroidOf(walls.flatMap((w) => [w.a, w.b])), [walls]);
   const fenceCentroid = useMemo(() => centroidOf(fences.flatMap((f) => [f.a, f.b])), [fences]);
-  const dimKinds = dimMode === 'off' ? [] : dimMode === 'both' ? ['interior', 'exterior'] : [dimMode];
+  const kindsFor = (m) => (m === 'off' ? [] : m === 'both' ? ['interior', 'exterior'] : [m]);
+  const dimKinds = kindsFor(dimMode);
   const openingsByWall = useMemo(() => {
     const m = {};
     openings.forEach((o) => { (m[o.wallId] ||= []).push(o); });
@@ -585,9 +586,9 @@ export default function Canvas2D() {
               swamp the plan (they're secondary; zoom in to read them) */}
           {layers.dims && dimOpacity > 0.02 && <Group opacity={dimOpacity} listening={dimOpacity > 0.5}>
             {walls.map((w) => {
-              if (w.noDim) return null; // dimensions hidden for this wall (per-wall override)
+              if (w.noDim) return null; // dimensions hidden for this wall
               const base = w.dimOff ?? dimOffset;
-              return dimKinds.map((k) => {
+              return kindsFor(w.dimMode || dimMode).map((k) => { // per-wall mode override
                 // push the outer (exterior/centerline) row out so it clears the opening string
                 const extra = hasOpenings && k !== 'interior' ? ROW_GAP : 0;
                 return (
@@ -597,8 +598,8 @@ export default function Canvas2D() {
               });
             })}
             {/* opening dimension strings (wall length split at each opening) */}
-            {dimMode !== 'off' && walls.map((w) => (
-              !w.noDim && openingsByWall[w.id]?.length
+            {walls.map((w) => (
+              !w.noDim && (w.dimMode || dimMode) !== 'off' && openingsByWall[w.id]?.length
                 ? <WallOpeningDims key={'od' + w.id} wall={w} openings={openingsByWall[w.id]} perpOffset={w.openDimOff ?? dimOffset}
                     centroid={wallCentroid} justify={wallJustify} scale={scale} palette={t} color={t.wallDim} onPillDown={startOffsetDrag(w, 'wall', w.id, 0, 'openDimOff')} zoom={view.k} />
                 : null

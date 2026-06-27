@@ -148,30 +148,32 @@ function SelectedProps() {
             <p className="empty-note" style={{ marginTop: 8 }}>Drag the round corner handle to move joined walls together; the amber ◆ splits off just this wall (or hold Alt).</p>
 
             <div className="prop-subhead">Dimensions</div>
-            <div className="field">
-              <label>Lines <span className="muted">(all walls)</span></label>
-              <select value={dimMode} onChange={(e) => setDefault('dimMode', e.target.value)}>
-                <option value="off">Off</option>
-                <option value="centerline">Centerline</option>
-                <option value="interior">Interior (clear)</option>
-                <option value="exterior">Exterior (overall)</option>
-                <option value="both">Interior + Exterior</option>
-              </select>
-            </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: 'var(--muted)', margin: '2px 0 10px' }}>
               <input type="checkbox" checked={!el.noDim} onChange={(e) => commitSet({ noDim: !e.target.checked })} />
               Show dimensions for this wall
             </label>
             {!el.noDim && (
-              <div className="row2">
-                <Num label="Offset" suffix="ft" step={0.25} min={0}
-                  value={+(el.dimOff ?? dimOffsetDefault).toFixed(2)} onChange={(v) => commitSet({ dimOff: v })} />
-                <div className="field" style={{ justifyContent: 'flex-end' }}>
-                  <label>&nbsp;</label>
-                  <button className="btn ghost" style={{ width: '100%', background: 'var(--slate-bg)', color: 'var(--navy)' }}
-                    onClick={() => commitSet({ dimOff: undefined, openDimOff: undefined })} title="Use the global dimension offset">Reset</button>
+              <>
+                <div className="field">
+                  <label>Lines <span className="muted">(this wall)</span></label>
+                  <select value={el.dimMode ?? ''} onChange={(e) => commitSet({ dimMode: e.target.value || undefined })}>
+                    <option value="">Default ({dimMode})</option>
+                    <option value="centerline">Centerline</option>
+                    <option value="interior">Interior (clear)</option>
+                    <option value="exterior">Exterior (overall)</option>
+                    <option value="both">Interior + Exterior</option>
+                  </select>
                 </div>
-              </div>
+                <div className="row2">
+                  <Num label="Offset" suffix="ft" step={0.25} min={0}
+                    value={+(el.dimOff ?? dimOffsetDefault).toFixed(2)} onChange={(v) => commitSet({ dimOff: v })} />
+                  <div className="field" style={{ justifyContent: 'flex-end' }}>
+                    <label>&nbsp;</label>
+                    <button className="btn ghost" style={{ width: '100%', background: 'var(--slate-bg)', color: 'var(--navy)' }}
+                      onClick={() => commitSet({ dimOff: undefined, openDimOff: undefined, dimMode: undefined })} title="Use the global dimension defaults">Reset</button>
+                  </div>
+                </div>
+              </>
             )}
           </>
         );
