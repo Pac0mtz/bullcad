@@ -146,12 +146,15 @@ export default function Canvas2D() {
     const n = snapToNodes(pt, allNodes, 0.8);
     if (n.snapped) return { x: n.x, y: n.y, onNode: true };
     // snap onto a wall/fence mid-span so you can tie into a wall (T-junction)
-    let onSeg = null, bestD = 0.5;
+    let onSeg = null, host = null, bestD = 0.5;
     for (const s of [...walls, ...fences]) {
       const pr = projectOnSegment(pt, s.a, s.b);
-      if (pr.t > 0.03 && pr.t < 0.97 && pr.distance < bestD) { bestD = pr.distance; onSeg = pr.point; }
+      if (pr.t > 0.03 && pr.t < 0.97 && pr.distance < bestD) { bestD = pr.distance; onSeg = pr.point; host = s; }
     }
-    if (onSeg) return { x: onSeg.x, y: onSeg.y, onNode: true };
+    if (onSeg) {
+      const dx = host.b.x - host.a.x, dy = host.b.y - host.a.y, hl = Math.hypot(dx, dy) || 1;
+      return { x: onSeg.x, y: onSeg.y, onNode: true, onWall: true, wallDir: { x: dx / hl, y: dy / hl } };
+    }
     return { ...snapPt(pt, grid), onNode: false };
   };
 
@@ -731,10 +734,27 @@ export default function Canvas2D() {
           })()}
 
           {/* snap indicator */}
-          {cursorPx && ['wall', 'fence', 'room'].includes(tool) && (
-            <Circle x={cursorPx.x} y={cursorPx.y} radius={cursor?.onNode ? 7 : 4}
-              stroke={cursor?.onNode ? t.snapNode : t.snap} strokeWidth={2} fill={cursor?.onNode ? 'rgba(20,184,166,0.2)' : 'transparent'} listening={false} />
-          )}
+          {cursorPx && ['wall', 'fence', 'room'].includes(tool) && (() => {
+            // tie-in: landing on another wall's mid-span (T-junction) gets a distinct
+            // amber marker + a tick along the host wall, so you know the join was detected
+            if (cursor?.onWall && cursor.wallDir) {
+              const L = 16, dx = cursor.wallDir.x * L, dy = cursor.wallDir.y * L;
+              return (
+                <Group listening={false}>
+                  <Line points={[cursorPx.x - dx, cursorPx.y - dy, cursorPx.x + dx, cursorPx.y + dy]}
+                    stroke="#f59e0b" strokeWidth={3} lineCap="round" />
+                  <Circle x={cursorPx.x} y={cursorPx.y} radius={7} stroke="#f59e0b" strokeWidth={2.5}
+                    fill="rgba(245,158,11,0.25)" />
+                  <Text x={cursorPx.x + 11} y={cursorPx.y - 22} text="tie-in" fontSize={11} fontStyle="bold"
+                    fill="#b45309" />
+                </Group>
+              );
+            }
+            return (
+              <Circle x={cursorPx.x} y={cursorPx.y} radius={cursor?.onNode ? 7 : 4}
+                stroke={cursor?.onNode ? t.snapNode : t.snap} strokeWidth={2} fill={cursor?.onNode ? 'rgba(20,184,166,0.2)' : 'transparent'} listening={false} />
+            );
+          })()}
 
           {/* measure tool */}
           {measure.length > 0 && (
