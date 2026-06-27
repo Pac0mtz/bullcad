@@ -64,6 +64,8 @@ function SelectedProps() {
   const stairs = useStore((s) => s.stairs);
   const wallHeightDefault = useStore((s) => s.wallHeight);
   const dimOffsetDefault = useStore((s) => s.dimOffset);
+  const wallJustify = useStore((s) => s.wallJustify);
+  const setDefault = useStore((s) => s.setDefault);
   const update = useStore((s) => s.updateElement);
   const del = useStore((s) => s.deleteSelected);
   const splitWall = useStore((s) => s.splitWall);
@@ -89,6 +91,14 @@ function SelectedProps() {
           <>
             <ElevationButton type="wall" id={el.id} />
             <LengthField el={el} commitSet={commitSet} />
+            <div className="field">
+              <label>Wall line on <span className="muted">(all walls)</span></label>
+              <select value={wallJustify} onChange={(e) => setDefault('wallJustify', e.target.value)}>
+                <option value="interior">Interior face</option>
+                <option value="center">Centered</option>
+                <option value="exterior">Exterior face</option>
+              </select>
+            </div>
             <div className="field">
               <label>Preset</label>
               <select value={match ? match.label : 'custom'} onChange={(e) => {

@@ -742,22 +742,23 @@ export default function Canvas2D() {
       <div className="compass-control"><Compass size={50} /></div>
       <div className="scale-readout">1 grid = 1 ft &nbsp;·&nbsp; {Math.round(view.k * 100)}%<span className="sr-pan">&nbsp;·&nbsp; pan: Space-drag / middle-mouse</span></div>
 
-      {/* numeric length entry — appears once a wall/fence run is started; type an
-          exact length and press Enter to place the segment in the cursor's direction */}
-      {draft && (tool === 'wall' || tool === 'fence') && (
-        <div className="len-entry">
-          <span className="le-label">Length</span>
-          <input ref={lenInputRef} type="text" inputMode="decimal" value={lenStr}
-            placeholder={cursor ? formatFeetInches(dist(draft, cursor)) : '—'}
-            onChange={(e) => setLenStr(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); commitTypedLength(); }
-              else if (e.key === 'Escape') { e.preventDefault(); finishRun(false); e.currentTarget.blur(); }
-            }} />
-          <button className="le-finish" onMouseDown={(e) => { e.preventDefault(); finishRun(true); }} title="Finish this run and return to Select (Enter on empty, or double-click)">✓ Finish</button>
-          <span className="le-hint">↵ length · Esc / dbl-click ends</span>
-        </div>
-      )}
+      {/* compact length entry — floats next to the point being drawn; type a
+          length + Enter to place, ✓ to finish */}
+      {draft && (tool === 'wall' || tool === 'fence') && (() => {
+        const p = cursor || draft;
+        return (
+          <div className="len-entry" style={{ left: view.x + p.x * scale * view.k, top: view.y + p.y * scale * view.k, right: 'auto', bottom: 'auto', transform: 'translate(16px, -48px)' }}>
+            <input ref={lenInputRef} type="text" inputMode="decimal" value={lenStr}
+              placeholder={cursor ? formatFeetInches(dist(draft, cursor)) : '—'}
+              onChange={(e) => setLenStr(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); commitTypedLength(); }
+                else if (e.key === 'Escape') { e.preventDefault(); finishRun(false); e.currentTarget.blur(); }
+              }} />
+            <button className="le-finish" onMouseDown={(e) => { e.preventDefault(); finishRun(true); }} title="Finish (Enter on empty, or double-click)">✓</button>
+          </div>
+        );
+      })()}
 
       <FenceLegend fences={fences} />
     </div>

@@ -65,7 +65,7 @@ export const useStore = create((set, get) => ({
   dimOffset: 1.0,      // feet between wall face and dimension line
 
   // ----- alignment: where the drawn line sits on the wall/fence body -----
-  wallJustify: 'center',  // 'center' | 'interior' | 'exterior'
+  wallJustify: 'interior',  // 'center' | 'interior' | 'exterior' — drawn line on the interior face by default
   fenceJustify: 'center', // 'center' | 'interior' | 'exterior'
 
   // ----- defaults applied to newly drawn elements -----
