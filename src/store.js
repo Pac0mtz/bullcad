@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { uid, FENCE_TYPES, OPENING_DEFAULTS, WINDOW_STYLES } from './utils/geometry.js';
 
 // ----- snapshot helpers for undo/redo -----
-const GEOM_KEYS = ['walls', 'openings', 'fences', 'gates', 'labels', 'stairs'];
+const GEOM_KEYS = ['walls', 'openings', 'fences', 'gates', 'posts', 'labels', 'stairs'];
 const snapshot = (s) => JSON.parse(JSON.stringify(Object.fromEntries(GEOM_KEYS.map((k) => [k, s[k]]))));
 // live geometry of a state, and an empty page's geometry
 const geomOf = (s) => Object.fromEntries(GEOM_KEYS.map((k) => [k, s[k]]));
@@ -47,7 +47,7 @@ function samplePlan() {
     { id: uid('gate'), fenceId: fences[0].id, t: 0.5, width: 4 },
   ];
 
-  return { walls, openings, fences, gates, labels: [], stairs: [] };
+  return { walls, openings, fences, gates, posts: [], labels: [], stairs: [] };
 }
 
 // ----- autosave: persist the whole project to localStorage so a refresh (or a
@@ -282,6 +282,19 @@ export const useStore = create((set, get) => ({
     return id;
   },
 
+  // ---- extra fence posts (placed individually, on top of the auto-spaced posts) ----
+  addPost: (fenceId, t) => {
+    const id = uid('post');
+    get().commit((s) => {
+      const f = s.fences.find((x) => x.id === fenceId);
+      const height = f?.height ?? s.fenceHeight;
+      const material = f?.fenceType || s.fenceType;
+      const color = f?.color || FENCE_TYPES[material]?.color;
+      return { posts: [...s.posts, { id, fenceId, t, height, material, color }] };
+    });
+    return id;
+  },
+
   // ---- labels (leader-line callouts) ----
   addLabel: (anchor) => {
     const id = uid('label');
@@ -326,7 +339,7 @@ export const useStore = create((set, get) => ({
       const out = { [key]: s[key].filter((e) => e.id !== id) };
       // cascade: remove openings on a deleted wall / gates on a deleted fence
       if (type === 'wall') out.openings = s.openings.filter((o) => o.wallId !== id);
-      if (type === 'fence') out.gates = s.gates.filter((g) => g.fenceId !== id);
+      if (type === 'fence') { out.gates = s.gates.filter((g) => g.fenceId !== id); out.posts = s.posts.filter((p) => p.fenceId !== id); }
       return out;
     }),
 
@@ -349,7 +362,7 @@ export const useStore = create((set, get) => ({
         if (sel.type === 'wall' || sel.type === 'fence') return { ...e, a: { x: e.a.x + mx, y: e.a.y + my }, b: { x: e.b.x + mx, y: e.b.y + my } };
         if (sel.type === 'stair') return { ...e, x: e.x + mx, y: e.y + my };
         if (sel.type === 'label') return { ...e, pos: { x: e.pos.x + mx, y: e.pos.y + my }, anchor: { x: e.anchor.x + mx, y: e.anchor.y + my } };
-        if (sel.type === 'opening' || sel.type === 'gate') return { ...e, t: Math.max(0, Math.min(1, e.t + dx * 0.04)) }; // slide along host
+        if (sel.type === 'opening' || sel.type === 'gate' || sel.type === 'post') return { ...e, t: Math.max(0, Math.min(1, e.t + dx * 0.04)) }; // slide along host
         return e;
       }) };
     });
@@ -360,7 +373,7 @@ export const useStore = create((set, get) => ({
     set((s) => ({
       past: [...s.past, snapshot(s)],
       future: [],
-      walls: [], openings: [], fences: [], gates: [], labels: [], stairs: [],
+      walls: [], openings: [], fences: [], gates: [], posts: [], labels: [], stairs: [],
       selection: null,
     })),
 
@@ -421,7 +434,7 @@ export const useStore = create((set, get) => ({
       return {
         past: [], future: [], selection: null, elevationTarget: null,
         pages: [{ id: 'page1', name: 'Page 1' }], activePage: 'page1', pageStore: {},
-        walls: data.walls || [], openings: data.openings || [], fences: data.fences || [], gates: data.gates || [], labels: data.labels || [], stairs: data.stairs || [],
+        walls: data.walls || [], openings: data.openings || [], fences: data.fences || [], gates: data.gates || [], posts: data.posts || [], labels: data.labels || [], stairs: data.stairs || [],
       };
     }),
 }));

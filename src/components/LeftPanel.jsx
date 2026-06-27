@@ -80,6 +80,7 @@ export default function LeftPanel({ onCollapse }) {
             { id: 'opening', label: 'Opening', sub: 'no door', Icon: IconOpening, k: 'O' },
             { id: 'fence', label: 'Fence', sub: 'click to chain', Icon: IconFence, k: 'F' },
             { id: 'gate', label: 'Gate', sub: 'on a fence', Icon: IconGate, k: 'G' },
+            { id: 'post', label: 'Post', sub: 'on a fence', Icon: IconFence, k: 'P' },
             { id: 'measure', label: 'Measure', sub: 'distance', Icon: IconMeasure, k: 'M' },
             { id: 'stairs', label: 'Stairs', sub: 'place', Icon: IconStairs, k: 'S' },
             { id: 'label', label: 'Label', sub: 'callout', Icon: IconLabel, k: 'L' },

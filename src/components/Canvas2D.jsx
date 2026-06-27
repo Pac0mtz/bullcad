@@ -7,7 +7,7 @@ import {
 
 const FENCE_THICK = 0.3; // nominal fence body width (ft) for alignment offset
 import { CANVAS_THEME } from '../utils/theme.js';
-import { WallShape, OpeningShape, FenceShape, GateShape, DimLabel, WallDimension, WallOpeningDims, LabelShape, StairShape } from './canvas/Shapes.jsx';
+import { WallShape, OpeningShape, FenceShape, GateShape, PostShape, DimLabel, WallDimension, WallOpeningDims, LabelShape, StairShape } from './canvas/Shapes.jsx';
 import { IconZoomIn, IconZoomOut, IconFit } from './Icons.jsx';
 import FenceLegend from './FenceLegend.jsx';
 import Compass from './Compass.jsx';
@@ -22,7 +22,7 @@ export default function Canvas2D() {
   const layerRef = useRef(null);
 
   const store = useStore();
-  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, labels, stairs, selection, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, layers, detachCorner } = store;
+  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, posts, labels, stairs, selection, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, layers, detachCorner } = store;
   const rooms = useMemo(() => (showRoomAreas ? detectRooms(walls) : []), [showRoomAreas, walls]);
   const t = CANVAS_THEME[theme] || CANVAS_THEME.light;
 
@@ -264,6 +264,9 @@ export default function Canvas2D() {
     } else if (tool === 'gate') {
       const hit = nearest(raw, fences);
       if (hit) { const id = store.addGate(hit.id, hit.t); store.setTool('select'); store.select({ type: 'gate', id }); }
+    } else if (tool === 'post') {
+      const hit = nearest(raw, fences);
+      if (hit) { const id = store.addPost(hit.id, hit.t); store.setTool('select'); store.select({ type: 'post', id }); }
     } else if (tool === 'measure') {
       setMeasure((m) => (m.length >= 2 ? [raw] : [...m, raw]));
     } else if (tool === 'label') {
@@ -428,7 +431,7 @@ export default function Canvas2D() {
         store.moveJoints(type, d.jointsA, { x: d.origA.x + d.perp.x * off, y: d.origA.y + d.perp.y * off });
         store.moveJoints(type, d.jointsB, { x: d.origB.x + d.perp.x * off, y: d.origB.y + d.perp.y * off });
       }
-    } else if (d.kind === 'opening' || d.kind === 'gate') {
+    } else if (d.kind === 'opening' || d.kind === 'gate' || d.kind === 'post') {
       const host = (d.kind === 'opening' ? walls : fences).find((x) => x.id === d.hostId);
       if (host) {
         const { t, gs } = snapAlignT(raw, host, d.kind, d.id);
@@ -603,6 +606,17 @@ export default function Canvas2D() {
                 onSelect={(e) => {
                   e.cancelBubble = true;
                   if (tool === 'select') { store.select({ type: 'gate', id: g.id }); startHandle({ kind: 'gate', id: g.id, hostId: g.fenceId })(e); }
+                }} />
+            );
+          })}
+          {/* individually placed posts (draggable along their fence) */}
+          {layers.fences && posts.map((p) => {
+            const f = fences.find((x) => x.id === p.fenceId);
+            return (
+              <PostShape key={p.id} post={p} fence={f} scale={scale} palette={t} seg={f ? fenceSegs.get(f.id) : null} selected={selection?.id === p.id}
+                onSelect={(e) => {
+                  e.cancelBubble = true;
+                  if (tool === 'select') { store.select({ type: 'post', id: p.id }); startHandle({ kind: 'post', id: p.id, hostId: p.fenceId })(e); }
                 }} />
             );
           })}

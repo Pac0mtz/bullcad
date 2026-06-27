@@ -1,7 +1,7 @@
 import { dist, postsAlong, FENCE_TYPES, WALL_MATERIALS } from './geometry.js';
 
 // Compute the full bill-of-quantities from the geometry model.
-export function computeQuantities({ walls, openings, fences, gates }) {
+export function computeQuantities({ walls, openings, fences, gates, posts = [] }) {
   // Wall linear footage — total, exterior/interior split, and by material
   let wallLF = 0, wallExtLF = 0, wallIntLF = 0;
   const wallByMaterial = {};
@@ -39,6 +39,13 @@ export function computeQuantities({ walls, openings, fences, gates }) {
       const k = `${p.x.toFixed(2)},${p.y.toFixed(2)}`;
       postSet.set(k, p);
     }
+  }
+  // individually-placed posts add to the count (dedupe against an auto post at the same spot)
+  for (const p of posts) {
+    const f = fences.find((x) => x.id === p.fenceId);
+    if (!f) continue;
+    const pt = { x: f.a.x + (f.b.x - f.a.x) * p.t, y: f.a.y + (f.b.y - f.a.y) * p.t };
+    postSet.set(`${pt.x.toFixed(2)},${pt.y.toFixed(2)}`, pt);
   }
   const postCount = postSet.size;
 

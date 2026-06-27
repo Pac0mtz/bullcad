@@ -249,6 +249,21 @@ export function FenceShape({ fence, scale, selected, onSelect, palette = DEFAULT
   );
 }
 
+// ------------- POST (an individually placed fence post) -------------
+export function PostShape({ post, fence, scale, selected, onSelect, palette = DEFAULT_PALETTE, seg = null }) {
+  if (!fence) return null;
+  const a = seg?.a || fence.a, b = seg?.b || fence.b;
+  const c = lerp(a, b, post.t);
+  const ps = Math.max(5, 0.55 * scale); // a touch larger than the auto posts so a placed post reads as deliberate
+  return (
+    <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)}>
+      <Rect x={c.x * scale - ps / 2} y={c.y * scale - ps / 2} width={ps} height={ps}
+        fill={post.color || palette.postFill} stroke={selected ? BLUE : '#0a2540'} strokeWidth={selected ? 2 : 0.75}
+        cornerRadius={1} hitStrokeWidth={16} />
+    </Group>
+  );
+}
+
 // ---------------- GATE ----------------
 export function GateShape({ gate, fence, scale, selected, onSelect, palette = DEFAULT_PALETTE, seg = null, centroid = null }) {
   if (!fence) return null;

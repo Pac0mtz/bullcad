@@ -60,6 +60,7 @@ function SelectedProps() {
   const openings = useStore((s) => s.openings);
   const fences = useStore((s) => s.fences);
   const gates = useStore((s) => s.gates);
+  const posts = useStore((s) => s.posts);
   const labels = useStore((s) => s.labels);
   const stairs = useStore((s) => s.stairs);
   const wallHeightDefault = useStore((s) => s.wallHeight);
@@ -76,7 +77,7 @@ function SelectedProps() {
     return <p className="empty-note">Nothing selected. Use the <b>Select</b> tool and click any wall, fence, door, window, gate, or label to edit it.</p>;
   }
 
-  const list = { wall: walls, opening: openings, fence: fences, gate: gates, label: labels, stair: stairs }[sel.type];
+  const list = { wall: walls, opening: openings, fence: fences, gate: gates, post: posts, label: labels, stair: stairs }[sel.type];
   const el = list.find((e) => e.id === sel.id);
   if (!el) return <p className="empty-note">Selection no longer exists.</p>;
 
@@ -429,6 +430,18 @@ function SelectedProps() {
         </>
       )}
 
+      {sel.type === 'post' && (
+        <>
+          <p className="empty-note">A placed fence post (on top of the auto-spaced posts). Drag it along its fence in the plan or the elevation view, or set its position here.</p>
+          <div className="field">
+            <label>Position along fence — {Math.round((el.t || 0) * 100)}%</label>
+            <input type="range" min="0" max="1" step="0.01" value={el.t ?? 0.5} style={{ width: '100%' }}
+              onChange={(e) => set({ t: parseFloat(e.target.value) })} onMouseUp={(e) => commitSet({ t: parseFloat(e.target.value) })} />
+          </div>
+          <Num label="Height" suffix="ft" step={0.5} min={1} value={el.height ?? 6} onChange={(v) => commitSet({ height: v })} />
+        </>
+      )}
+
       {sel.type === 'label' && (
         <>
           <div className="field">
@@ -471,10 +484,11 @@ function Quantities() {
   const openings = useStore((s) => s.openings);
   const fences = useStore((s) => s.fences);
   const gates = useStore((s) => s.gates);
+  const posts = useStore((s) => s.posts);
   const exportPlan = useStore((s) => s.exportPlan);
   const [copied, setCopied] = useState('');
 
-  const q = computeQuantities({ walls, openings, fences, gates });
+  const q = computeQuantities({ walls, openings, fences, gates, posts });
   const rows = quantitiesRows(q);
 
   const copyTable = () => {

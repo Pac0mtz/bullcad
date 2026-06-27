@@ -53,6 +53,7 @@ export default function ElevationCanvas() {
   const openings = useStore((s) => s.openings);
   const fences = useStore((s) => s.fences);
   const gates = useStore((s) => s.gates);
+  const posts = useStore((s) => s.posts);
   const selection = useStore((s) => s.selection);
   const update = useStore((s) => s.updateElement);
   const select = useStore((s) => s.select);
@@ -235,6 +236,24 @@ export default function ElevationCanvas() {
   [0, L].forEach((s) => dims.push(<Line key={'ot' + s} points={[X(s), ovY - tick, X(s), ovY + tick]} stroke={C.dim} strokeWidth={0.9} strokeScaleEnabled={false} listening={false} />));
   dims.push(<Text key="ovT" x={X(L / 2) - 50} y={ovY + 4} width={100} align="center" text={formatFeetInches(L)} fontSize={14} fontStyle="700" fill={C.dim} listening={false} />);
 
+  // individually-placed posts on this fence — draggable horizontally to reposition
+  const fencePosts = isWall ? [] : posts.filter((p) => p.fenceId === el.id);
+  const drawPost = (p) => {
+    const seld = selection?.type === 'post' && selection.id === p.id;
+    const ph = Math.min(Hgt, p.height || Hgt);
+    const pwpx = Math.max(4, 0.4 * k); // ~0.4 ft post body
+    const cx = X(p.t * L);
+    return (
+      <Rect key={p.id} x={cx - pwpx / 2} y={Y(ph)} width={pwpx} height={ph * k}
+        fill={p.color || C.line} stroke={seld ? HILITE : C.line} strokeWidth={seld ? 2 : 1} strokeScaleEnabled={false}
+        cornerRadius={1} draggable
+        onMouseDown={(e) => { e.cancelBubble = true; select({ type: 'post', id: p.id }); onStart(); }}
+        dragBoundFunc={(pos) => ({ x: clamp(pos.x, X(0) - pwpx / 2, X(L) - pwpx / 2), y: Y(ph) })}
+        onDragMove={(e) => { const center = (e.target.x() + pwpx / 2 - originX) / k; queueUpdate('post', p.id, { t: clamp(center / L, 0, 1) }); }}
+        onDragEnd={onEnd} />
+    );
+  };
+
   const heightHandle = (
     <Group>
       <Line points={[X(0), Y(Hgt), X(L), Y(Hgt)]} stroke={HILITE} strokeWidth={2} strokeScaleEnabled={false} opacity={0.5} listening={false} />
@@ -252,6 +271,7 @@ export default function ElevationCanvas() {
           <Line points={[X(-1), groundY, X(L + 1), groundY]} stroke={C.line} strokeWidth={2} strokeScaleEnabled={false} listening={false} />
           {body}
           {items.map(drawItem)}
+          {fencePosts.map(drawPost)}
           {dims}
           {heightHandle}
         </Layer>
