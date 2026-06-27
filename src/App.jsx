@@ -7,6 +7,7 @@ import Canvas2D from './components/Canvas2D.jsx';
 import Scene3D from './components/Scene3D.jsx';
 import ElevationCanvas from './components/ElevationCanvas.jsx';
 import ExportModal from './components/ExportModal.jsx';
+import PageTabs from './components/PageTabs.jsx';
 import { IconCollapseLeft, IconCollapseRight } from './components/Icons.jsx';
 
 export default function App() {
@@ -82,6 +83,7 @@ export default function App() {
         )}
         <div className="canvas-wrap">
           {elevationTarget ? <ElevationCanvas /> : mode === '2d' ? <Canvas2D /> : <Scene3D />}
+          {!elevationTarget && <PageTabs />}
         </div>
         {rightHidden && (
           <button className="panel-reopen right" onClick={() => setRightHidden(false)} title="Show properties panel" aria-label="Show properties panel">

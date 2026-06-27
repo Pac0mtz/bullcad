@@ -4,6 +4,9 @@ import { uid, FENCE_TYPES, OPENING_DEFAULTS, WINDOW_STYLES } from './utils/geome
 // ----- snapshot helpers for undo/redo -----
 const GEOM_KEYS = ['walls', 'openings', 'fences', 'gates', 'labels', 'stairs'];
 const snapshot = (s) => JSON.parse(JSON.stringify(Object.fromEntries(GEOM_KEYS.map((k) => [k, s[k]]))));
+// live geometry of a state, and an empty page's geometry
+const geomOf = (s) => Object.fromEntries(GEOM_KEYS.map((k) => [k, s[k]]));
+const emptyGeom = () => Object.fromEntries(GEOM_KEYS.map((k) => [k, []]));
 
 // ----- a small sample plan so the app looks alive on first load -----
 function samplePlan() {
@@ -91,8 +94,13 @@ export const useStore = create((set, get) => ({
   windowGrid: false,     // colonial grille overlay
   gateWidth: 4,
 
-  // ----- geometry -----
+  // ----- geometry (the active page's live geometry) -----
   ...samplePlan(),
+
+  // ----- pages (multiple plans in one project) -----
+  pages: [{ id: 'page1', name: 'Page 1' }],
+  activePage: 'page1',
+  pageStore: {}, // id -> geometry snapshot for the INACTIVE pages
 
   // ----- selection + history -----
   selection: null, // { type:'wall'|'opening'|'fence'|'gate', id }
@@ -271,6 +279,15 @@ export const useStore = create((set, get) => ({
   },
 
   // ---- generic update of any element (no history per drag-tick; commit on end) ----
+  // move a shared corner: set the given endpoints (joints = [{id, end}]) of one
+  // element type to `pt` in a single update, so connected walls/fences follow
+  // the corner as one (no history per drag-tick; commit on release).
+  moveJoints: (type, joints, pt) => {
+    const key = type + 's';
+    const ends = new Map(joints.map((j) => [j.id, j.end]));
+    set((s) => ({ [key]: s[key].map((e) => ends.has(e.id) ? { ...e, [ends.get(e.id)]: { x: pt.x, y: pt.y } } : e) }));
+  },
+
   updateElement: (type, id, patch, withHistory = false) => {
     const key = type + 's';
     const apply = (s) => ({ [key]: s[key].map((e) => (e.id === id ? { ...e, ...patch } : e)) });
@@ -322,26 +339,64 @@ export const useStore = create((set, get) => ({
       selection: null,
     })),
 
+  // ---- pages ----
+  addPage: () => set((s) => {
+    const id = uid('page');
+    return {
+      pageStore: { ...s.pageStore, [s.activePage]: geomOf(s) }, // park current page
+      pages: [...s.pages, { id, name: `Page ${s.pages.length + 1}` }],
+      activePage: id,
+      ...emptyGeom(),
+      selection: null, elevationTarget: null, past: [], future: [],
+    };
+  }),
+  switchPage: (id) => set((s) => {
+    if (id === s.activePage || !s.pages.some((p) => p.id === id)) return {};
+    const target = s.pageStore[id] || emptyGeom();
+    return {
+      pageStore: { ...s.pageStore, [s.activePage]: geomOf(s) },
+      activePage: id,
+      ...target,
+      selection: null, elevationTarget: null, past: [], future: [],
+    };
+  }),
+  renamePage: (id, name) => set((s) => ({ pages: s.pages.map((p) => p.id === id ? { ...p, name: name || p.name } : p) })),
+  deletePage: (id) => set((s) => {
+    if (s.pages.length <= 1) return {}; // always keep at least one page
+    const pages = s.pages.filter((p) => p.id !== id);
+    const pageStore = { ...s.pageStore }; delete pageStore[id];
+    if (id !== s.activePage) return { pages, pageStore };
+    const next = pages[0].id, target = pageStore[next] || emptyGeom();
+    return { pages, pageStore, activePage: next, ...target, selection: null, elevationTarget: null, past: [], future: [] };
+  }),
+
   loadSample: () => set((s) => ({ past: [...s.past, snapshot(s)], future: [], ...samplePlan(), selection: null })),
 
   exportPlan: () => {
     const s = get();
+    const pages = s.pages.map((p) => ({ id: p.id, name: p.name, geom: p.id === s.activePage ? geomOf(s) : (s.pageStore[p.id] || emptyGeom()) }));
     return {
-      meta: { app: 'wall-fence-plan-maker', version: 1, units: 'feet', exported: new Date().toISOString() },
+      meta: { app: 'wall-fence-plan-maker', version: 2, units: 'feet', exported: new Date().toISOString() },
       settings: { scale: s.scale, grid: s.grid, wallHeight: s.wallHeight },
-      walls: s.walls, openings: s.openings, fences: s.fences, gates: s.gates, labels: s.labels, stairs: s.stairs,
+      pages, activePage: s.activePage,
+      ...geomOf(s), // top-level = active page (back-compat with v1 readers)
     };
   },
 
   loadPlan: (data) =>
-    set((s) => ({
-      past: [...s.past, snapshot(s)],
-      future: [],
-      walls: data.walls || [],
-      openings: data.openings || [],
-      fences: data.fences || [],
-      gates: data.gates || [],
-      labels: data.labels || [], stairs: data.stairs || [],
-      selection: null,
-    })),
+    set((s) => {
+      // v2: multi-page project · v1 (or external): single page
+      if (Array.isArray(data.pages) && data.pages.length) {
+        const active = data.activePage && data.pages.some((p) => p.id === data.activePage) ? data.activePage : data.pages[0].id;
+        const pageStore = {};
+        for (const p of data.pages) if (p.id !== active) pageStore[p.id] = { ...emptyGeom(), ...(p.geom || {}) };
+        const liveGeom = { ...emptyGeom(), ...((data.pages.find((p) => p.id === active) || {}).geom || {}) };
+        return { past: [], future: [], selection: null, elevationTarget: null, pages: data.pages.map((p) => ({ id: p.id, name: p.name })), activePage: active, pageStore, ...liveGeom };
+      }
+      return {
+        past: [], future: [], selection: null, elevationTarget: null,
+        pages: [{ id: 'page1', name: 'Page 1' }], activePage: 'page1', pageStore: {},
+        walls: data.walls || [], openings: data.openings || [], fences: data.fences || [], gates: data.gates || [], labels: data.labels || [], stairs: data.stairs || [],
+      };
+    }),
 }));

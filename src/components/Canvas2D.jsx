@@ -347,12 +347,43 @@ export default function Canvas2D() {
   const handleDragMove = (raw) => {
     const d = drag.current;
     d.moved = true;
-    if (d.kind === 'wallEnd') {
-      const pt = snapEnabled ? (() => { const n = snapToNodes(raw, allNodes.filter((x) => x !== undefined), 0.8); return n.snapped ? { x: n.x, y: n.y } : snapPt(raw, grid); })() : raw;
-      store.updateElement('wall', d.id, { [d.end]: { x: pt.x, y: pt.y } });
-    } else if (d.kind === 'fenceEnd') {
-      const pt = snapEnabled ? snapPt(raw, grid) : raw;
-      store.updateElement('fence', d.id, { [d.end]: { x: pt.x, y: pt.y } });
+    if (d.kind === 'wallEnd' || d.kind === 'fenceEnd') {
+      const type = d.kind === 'wallEnd' ? 'wall' : 'fence';
+      const list = type === 'wall' ? walls : fences;
+      // resolve the joined corner once: every endpoint of this element type that
+      // shares the dragged corner moves together (keeps rooms/runs connected)
+      if (!d.joints) {
+        const o = d.origin || (list.find((e) => e.id === d.id) || {})[d.end] || raw;
+        d.joints = [];
+        for (const e of list) for (const end of ['a', 'b']) if (dist(e[end], o) < 0.05) d.joints.push({ id: e.id, end });
+        if (!d.joints.length) d.joints = [{ id: d.id, end: d.end }];
+      }
+      let pt = raw;
+      if (snapEnabled) {
+        // snap to grid or to other nodes (excluding the corner being dragged)
+        const jointSet = new Set(d.joints.map((j) => j.id + j.end));
+        const others = list.flatMap((e) => ['a', 'b'].filter((end) => !jointSet.has(e.id + end)).map((end) => e[end]));
+        const n = snapToNodes(raw, others, 0.8);
+        pt = n.snapped ? { x: n.x, y: n.y } : snapPt(raw, grid);
+      }
+      store.moveJoints(type, d.joints, pt);
+    } else if (d.kind === 'wallMove') {
+      // slide a whole wall perpendicular to itself; both its corners move and
+      // every wall joined at those corners stretches to follow (room grows)
+      const w = walls.find((x) => x.id === d.id);
+      if (w) {
+        if (!d.start) {
+          d.start = raw; d.origA = { ...w.a }; d.origB = { ...w.b };
+          const L = dist(w.a, w.b) || 1;
+          d.perp = { x: -(w.b.y - w.a.y) / L, y: (w.b.x - w.a.x) / L };
+          const jointsAt = (pt) => { const o = []; for (const e of walls) for (const end of ['a', 'b']) if (dist(e[end], pt) < 0.05) o.push({ id: e.id, end }); return o; };
+          d.jointsA = jointsAt(d.origA); d.jointsB = jointsAt(d.origB);
+        }
+        let off = (raw.x - d.start.x) * d.perp.x + (raw.y - d.start.y) * d.perp.y;
+        if (snapEnabled) off = Math.round(off / grid) * grid;
+        store.moveJoints('wall', d.jointsA, { x: d.origA.x + d.perp.x * off, y: d.origA.y + d.perp.y * off });
+        store.moveJoints('wall', d.jointsB, { x: d.origB.x + d.perp.x * off, y: d.origB.y + d.perp.y * off });
+      }
     } else if (d.kind === 'opening' || d.kind === 'gate') {
       const host = (d.kind === 'opening' ? walls : fences).find((x) => x.id === d.hostId);
       if (host) {
@@ -445,6 +476,9 @@ export default function Canvas2D() {
 
   const cursorPx = cursor ? { x: cursor.x * scale, y: cursor.y * scale } : null;
   const showDraftPreview = draft && cursor && ['wall', 'fence'].includes(tool);
+  // dimension visibility ramps off when zoomed out — based on effective screen
+  // px-per-foot so it adapts to the scale setting (full ≥9px/ft, gone ≤5px/ft)
+  const dimOpacity = Math.max(0, Math.min(1, (scale * view.k - 5) / 4));
 
   const selWall = selection?.type === 'wall' ? walls.find((w) => w.id === selection.id) : null;
   const selFence = selection?.type === 'fence' ? fences.find((f) => f.id === selection.id) : null;
@@ -519,7 +553,7 @@ export default function Canvas2D() {
           {/* walls */}
           {layers.walls && walls.map((w) => (
             <WallShape key={w.id} wall={w} scale={scale} palette={t} seg={wallSegs.get(w.id)} selected={selection?.id === w.id}
-              onSelect={(e) => { e.cancelBubble = true; if (tool === 'select') store.select({ type: 'wall', id: w.id }); }} />
+              onSelect={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'wall', id: w.id }); startHandle({ kind: 'wallMove', id: w.id })(e); } }} />
           ))}
           {/* openings */}
           {layers.openings && openings.map((o) => {
@@ -533,8 +567,9 @@ export default function Canvas2D() {
             );
           })}
 
-          {/* dimension labels */}
-          {layers.dims && <Group>
+          {/* dimension labels — fade out when zoomed far out so they don't
+              swamp the plan (they're secondary; zoom in to read them) */}
+          {layers.dims && dimOpacity > 0.02 && <Group opacity={dimOpacity} listening={dimOpacity > 0.5}>
             {walls.map((w) => {
               const base = w.dimOff ?? dimOffset;
               return dimKinds.map((k) => {
@@ -576,14 +611,14 @@ export default function Canvas2D() {
           {selWall && ['a', 'b'].map((end) => (
             <Circle key={end} x={selWall[end].x * scale} y={selWall[end].y * scale} radius={coarse ? 10 : 6}
               fill="#fff" stroke={BLUE} strokeWidth={2} hitStrokeWidth={coarse ? 22 : 10}
-              onMouseDown={startHandle({ kind: 'wallEnd', id: selWall.id, end })}
-              onTouchStart={startHandle({ kind: 'wallEnd', id: selWall.id, end })} />
+              onMouseDown={startHandle({ kind: 'wallEnd', id: selWall.id, end, origin: { ...selWall[end] } })}
+              onTouchStart={startHandle({ kind: 'wallEnd', id: selWall.id, end, origin: { ...selWall[end] } })} />
           ))}
           {selFence && ['a', 'b'].map((end) => (
             <Circle key={end} x={selFence[end].x * scale} y={selFence[end].y * scale} radius={coarse ? 10 : 6}
               fill="#fff" stroke={BLUE} strokeWidth={2} hitStrokeWidth={coarse ? 22 : 10}
-              onMouseDown={startHandle({ kind: 'fenceEnd', id: selFence.id, end })}
-              onTouchStart={startHandle({ kind: 'fenceEnd', id: selFence.id, end })} />
+              onMouseDown={startHandle({ kind: 'fenceEnd', id: selFence.id, end, origin: { ...selFence[end] } })}
+              onTouchStart={startHandle({ kind: 'fenceEnd', id: selFence.id, end, origin: { ...selFence[end] } })} />
           ))}
 
           {/* room area labels */}

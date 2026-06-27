@@ -428,6 +428,32 @@ body {
 }
 .compass-control .compass { display: block; }
 
+/* ---------- Page tabs (multi-page project) ---------- */
+.page-tabs {
+  position: absolute;
+  top: 14px; left: 74px;
+  z-index: 9;
+  display: flex; align-items: center; gap: 6px;
+  max-width: calc(100% - 250px);
+  overflow-x: auto; scrollbar-width: none;
+  padding: 1px;
+}
+.page-tabs::-webkit-scrollbar { display: none; }
+.page-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 12px;
+  border: 1px solid var(--slate-100); border-radius: 8px;
+  background: var(--surface); color: var(--muted);
+  font-size: 12.5px; font-weight: 600; cursor: pointer;
+  box-shadow: var(--shadow); white-space: nowrap; flex: none;
+}
+.page-tab:hover { background: var(--slate-bg); color: var(--text); }
+.page-tab.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+.page-tab.add { padding: 0 11px; font-size: 15px; color: var(--blue); }
+.pt-x { display: inline-grid; place-items: center; width: 17px; height: 17px; margin-right: -4px; border-radius: 5px; font-size: 15px; line-height: 1; }
+.pt-x:hover { background: rgba(255,255,255,0.22); }
+@media (max-width: 900px) { .page-tabs { left: 58px; top: 12px; max-width: calc(100% - 210px); } }
+
 /* numeric length-entry HUD (active while drawing a wall/fence run) */
 .len-entry {
   position: absolute;
