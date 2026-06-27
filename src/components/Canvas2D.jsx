@@ -598,7 +598,12 @@ export default function Canvas2D() {
             {walls.map((w) => {
               if (w.noDim) return null; // dimensions hidden for this wall
               const base = w.dimOff ?? dimOffset;
-              return kindsFor(w.dimMode || dimMode).map((k) => { // per-wall mode override
+              // an interior partition has no meaningful exterior face — measuring it
+              // "exterior" overshoots into the walls it ties into. Dimension it by its
+              // location: fall back to the interior (true span) for non-exterior walls.
+              const kinds = [...new Set(kindsFor(w.dimMode || dimMode)
+                .map((k) => (k === 'exterior' && !w.exterior ? 'interior' : k)))];
+              return kinds.map((k) => { // per-wall mode override
                 // push the outer (exterior/centerline) row out so it clears the opening string
                 const extra = hasOpenings && k !== 'interior' ? ROW_GAP : 0;
                 return (
