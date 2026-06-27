@@ -30,6 +30,7 @@ export default function Canvas2D() {
   const [view, setView] = useState({ x: 120, y: 90, k: 1 });
   const [cursor, setCursor] = useState(null); // feet pt under pointer (snapped)
   const [draft, setDraft] = useState(null); // feet pt: start of current wall/fence segment
+  const [runStart, setRunStart] = useState(null); // first point of the current run (for closing the loop)
   const [lenStr, setLenStr] = useState(''); // typed length (numeric entry while drawing)
   const lenInputRef = useRef(null);
   const [measure, setMeasure] = useState([]); // feet pts
@@ -37,6 +38,7 @@ export default function Canvas2D() {
   const drag = useRef(null); // active handle drag
   const space = useRef(false);
   const shift = useRef(false);
+  const alt = useRef(false);
   const pan = useRef(null);
   const coarse = useMemo(() => typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches, []);
 
@@ -52,8 +54,8 @@ export default function Canvas2D() {
 
   // ---- space-to-pan + shift-to-constrain-angle ----
   useEffect(() => {
-    const down = (e) => { if (e.code === 'Space') space.current = true; if (e.shiftKey) shift.current = true; };
-    const up = (e) => { if (e.code === 'Space') space.current = false; if (!e.shiftKey) shift.current = false; };
+    const down = (e) => { if (e.code === 'Space') space.current = true; if (e.shiftKey) shift.current = true; if (e.altKey) alt.current = true; };
+    const up = (e) => { if (e.code === 'Space') space.current = false; if (!e.shiftKey) shift.current = false; if (!e.altKey) alt.current = false; };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
@@ -101,7 +103,10 @@ export default function Canvas2D() {
   }, []);
 
   // reset draft/measure when tool changes
-  useEffect(() => { setDraft(null); setMeasure([]); setLenStr(''); }, [tool]);
+  useEffect(() => { setDraft(null); setRunStart(null); setMeasure([]); setLenStr(''); }, [tool]);
+
+  // finish the current wall/fence run; `toSelect` also drops back to the Select tool
+  const finishRun = (toSelect) => { setDraft(null); setRunStart(null); setLenStr(''); setGuides([]); if (toSelect) store.setTool('select'); };
 
   // focus the length-entry box as soon as a wall/fence run is started
   useEffect(() => {
@@ -221,9 +226,10 @@ export default function Canvas2D() {
     if (tool === 'wall' || tool === 'fence') {
       const pt = drawPt(raw);
       const clean = { x: pt.x, y: pt.y };
-      if (!draft) { setDraft(clean); return; }
-      if (dist(draft, clean) < 0.1) { setDraft(null); return; } // double-clickish finish
+      if (!draft) { setDraft(clean); setRunStart(clean); return; } // begin a run
+      if (dist(draft, clean) < 0.1) { finishRun(false); return; }   // clicked the same point → finish (stay in tool)
       tool === 'wall' ? store.addWall(draft, clean) : store.addFence(draft, clean);
+      if (runStart && dist(clean, runStart) < 0.1) { finishRun(true); return; } // closed the loop → done, back to Select
       setDraft(clean);
     } else if (tool === 'room') {
       const pt = snapDraw(raw);
@@ -261,7 +267,7 @@ export default function Canvas2D() {
     }
   };
 
-  const onDblClick = () => { if (tool === 'wall' || tool === 'fence') setDraft(null); };
+  const onDblClick = () => { if (tool === 'wall' || tool === 'fence') finishRun(true); };
 
   // single-finger pan (Konva Stage touch events); a small move stays a tap so
   // Konva still fires onTap → place/select
@@ -353,10 +359,16 @@ export default function Canvas2D() {
       // resolve the joined corner once: every endpoint of this element type that
       // shares the dragged corner moves together (keeps rooms/runs connected)
       if (!d.joints) {
-        const o = d.origin || (list.find((e) => e.id === d.id) || {})[d.end] || raw;
-        d.joints = [];
-        for (const e of list) for (const end of ['a', 'b']) if (dist(e[end], o) < 0.05) d.joints.push({ id: e.id, end });
-        if (!d.joints.length) d.joints = [{ id: d.id, end: d.end }];
+        // Alt at grab time detaches just this corner; otherwise the whole joint
+        // (every segment sharing the corner) moves together
+        if (alt.current) {
+          d.joints = [{ id: d.id, end: d.end }];
+        } else {
+          const o = d.origin || (list.find((e) => e.id === d.id) || {})[d.end] || raw;
+          d.joints = [];
+          for (const e of list) for (const end of ['a', 'b']) if (dist(e[end], o) < 0.05) d.joints.push({ id: e.id, end });
+          if (!d.joints.length) d.joints = [{ id: d.id, end: d.end }];
+        }
       }
       let pt = raw;
       if (snapEnabled) {
@@ -367,22 +379,24 @@ export default function Canvas2D() {
         pt = n.snapped ? { x: n.x, y: n.y } : snapPt(raw, grid);
       }
       store.moveJoints(type, d.joints, pt);
-    } else if (d.kind === 'wallMove') {
-      // slide a whole wall perpendicular to itself; both its corners move and
-      // every wall joined at those corners stretches to follow (room grows)
-      const w = walls.find((x) => x.id === d.id);
+    } else if (d.kind === 'wallMove' || d.kind === 'fenceMove') {
+      // slide a whole wall/fence perpendicular to itself; both its corners move
+      // and every segment joined at those corners stretches to follow
+      const type = d.kind === 'wallMove' ? 'wall' : 'fence';
+      const list = type === 'wall' ? walls : fences;
+      const w = list.find((x) => x.id === d.id);
       if (w) {
         if (!d.start) {
           d.start = raw; d.origA = { ...w.a }; d.origB = { ...w.b };
           const L = dist(w.a, w.b) || 1;
           d.perp = { x: -(w.b.y - w.a.y) / L, y: (w.b.x - w.a.x) / L };
-          const jointsAt = (pt) => { const o = []; for (const e of walls) for (const end of ['a', 'b']) if (dist(e[end], pt) < 0.05) o.push({ id: e.id, end }); return o; };
+          const jointsAt = (pt) => { const o = []; for (const e of list) for (const end of ['a', 'b']) if (dist(e[end], pt) < 0.05) o.push({ id: e.id, end }); return o; };
           d.jointsA = jointsAt(d.origA); d.jointsB = jointsAt(d.origB);
         }
         let off = (raw.x - d.start.x) * d.perp.x + (raw.y - d.start.y) * d.perp.y;
         if (snapEnabled) off = Math.round(off / grid) * grid;
-        store.moveJoints('wall', d.jointsA, { x: d.origA.x + d.perp.x * off, y: d.origA.y + d.perp.y * off });
-        store.moveJoints('wall', d.jointsB, { x: d.origB.x + d.perp.x * off, y: d.origB.y + d.perp.y * off });
+        store.moveJoints(type, d.jointsA, { x: d.origA.x + d.perp.x * off, y: d.origA.y + d.perp.y * off });
+        store.moveJoints(type, d.jointsB, { x: d.origB.x + d.perp.x * off, y: d.origB.y + d.perp.y * off });
       }
     } else if (d.kind === 'opening' || d.kind === 'gate') {
       const host = (d.kind === 'opening' ? walls : fences).find((x) => x.id === d.hostId);
@@ -536,7 +550,7 @@ export default function Canvas2D() {
           {/* fences (under walls) */}
           {layers.fences && fences.map((f) => (
             <FenceShape key={f.id} fence={f} scale={scale} palette={t} seg={fenceSegs.get(f.id)} gates={gatesByFence[f.id] || []} selected={selection?.id === f.id}
-              onSelect={(e) => { e.cancelBubble = true; if (tool === 'select') store.select({ type: 'fence', id: f.id }); }} />
+              onSelect={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'fence', id: f.id }); startHandle({ kind: 'fenceMove', id: f.id })(e); } }} />
           ))}
           {/* gates */}
           {layers.gates && gates.map((g) => {
@@ -571,6 +585,7 @@ export default function Canvas2D() {
               swamp the plan (they're secondary; zoom in to read them) */}
           {layers.dims && dimOpacity > 0.02 && <Group opacity={dimOpacity} listening={dimOpacity > 0.5}>
             {walls.map((w) => {
+              if (w.noDim) return null; // dimensions hidden for this wall (per-wall override)
               const base = w.dimOff ?? dimOffset;
               return dimKinds.map((k) => {
                 // push the outer (exterior/centerline) row out so it clears the opening string
@@ -583,7 +598,7 @@ export default function Canvas2D() {
             })}
             {/* opening dimension strings (wall length split at each opening) */}
             {dimMode !== 'off' && walls.map((w) => (
-              openingsByWall[w.id]?.length
+              !w.noDim && openingsByWall[w.id]?.length
                 ? <WallOpeningDims key={'od' + w.id} wall={w} openings={openingsByWall[w.id]} perpOffset={w.openDimOff ?? dimOffset}
                     centroid={wallCentroid} justify={wallJustify} scale={scale} palette={t} color={t.wallDim} onPillDown={startOffsetDrag(w, 'wall', w.id, 0, 'openDimOff')} zoom={view.k} />
                 : null
@@ -665,6 +680,12 @@ export default function Canvas2D() {
               <Line points={[draft.x * scale, draft.y * scale, cursor.x * scale, cursor.y * scale]}
                 stroke={tool === 'wall' ? BLUE : TEAL} strokeWidth={2} dash={[6, 5]} />
               <DimLabel a={draft} b={{ x: cursor.x, y: cursor.y }} scale={scale} palette={t} color={tool === 'wall' ? BLUE : t.fenceDim} zoom={view.k} />
+              {/* "close the loop" target — click the start point to finish */}
+              {runStart && dist(runStart, draft) > 0.1 && (
+                <Circle x={runStart.x * scale} y={runStart.y * scale} radius={9 / view.k}
+                  stroke={t.snapNode || TEAL} strokeWidth={2.5 / view.k}
+                  fill={dist(cursor, runStart) < 0.8 ? 'rgba(20,184,166,0.25)' : 'transparent'} />
+              )}
             </Group>
           )}
 
@@ -731,9 +752,10 @@ export default function Canvas2D() {
             onChange={(e) => setLenStr(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') { e.preventDefault(); commitTypedLength(); }
-              else if (e.key === 'Escape') { e.preventDefault(); setDraft(null); setLenStr(''); e.currentTarget.blur(); }
+              else if (e.key === 'Escape') { e.preventDefault(); finishRun(false); e.currentTarget.blur(); }
             }} />
-          <span className="le-hint">↵ place · Esc cancel</span>
+          <button className="le-finish" onMouseDown={(e) => { e.preventDefault(); finishRun(true); }} title="Finish this run and return to Select (Enter on empty, or double-click)">✓ Finish</button>
+          <span className="le-hint">↵ length · Esc / dbl-click ends</span>
         </div>
       )}
 

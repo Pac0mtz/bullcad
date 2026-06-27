@@ -4,11 +4,16 @@ import { IconChevron, IconCollapseLeft, IconCollapseRight } from './Icons.jsx';
 // A collapsible panel section with a clickable header. `right` renders a small
 // node on the right of the header (e.g. a count badge). Sections remember their
 // own open/closed state so the panel stays scannable.
-export function Section({ title, children, defaultOpen = true, right = null }) {
-  const [open, setOpen] = useState(defaultOpen);
+// `open`/`onToggle` make the section controlled (used for accordion panels where
+// only one is open at a time); otherwise it manages its own open/closed state.
+export function Section({ title, children, defaultOpen = true, right = null, open: openProp, onToggle }) {
+  const [openState, setOpenState] = useState(defaultOpen);
+  const controlled = openProp !== undefined;
+  const open = controlled ? openProp : openState;
+  const toggle = () => { if (controlled) onToggle?.(); else setOpenState((o) => !o); };
   return (
     <div className={'panel-section' + (open ? '' : ' is-collapsed')}>
-      <button type="button" className="section-head" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className="section-head" aria-expanded={open} onClick={toggle}>
         <IconChevron className="section-chevron" />
         <span className="panel-title">{title}</span>
         {right != null && <span className="section-right">{right}</span>}

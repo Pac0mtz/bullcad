@@ -215,6 +215,12 @@ body {
   font-weight: 700;
   margin: 0;
 }
+/* small sub-heading within a properties block (e.g. "Dimensions") */
+.prop-subhead {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--muted); font-weight: 700;
+  margin: 4px 0 8px; padding-top: 10px; border-top: 1px solid var(--slate-100);
+}
 
 /* ---- Panel header (sticky title + hide button) ---- */
 .panel-head {
@@ -474,6 +480,13 @@ body {
   background: var(--bg); text-align: right;
 }
 .len-entry input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 2px rgba(20,184,166,0.25); }
+.len-entry .le-finish {
+  height: 28px; padding: 0 11px;
+  border: none; border-radius: 7px;
+  background: var(--teal); color: #03201c;
+  font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.len-entry .le-finish:hover { filter: brightness(1.06); }
 .len-entry .le-hint { font-size: 10.5px; font-weight: 600; color: var(--muted); white-space: nowrap; }
 
 .scale-readout {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useStore } from '../store.js';
 import { Section, PanelHead } from './ui.jsx';
 import { FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS } from '../utils/geometry.js';
@@ -58,6 +58,9 @@ function Num({ label, value, onChange, step = 0.5, min = 0, max, suffix }) {
 export default function LeftPanel({ onCollapse }) {
   const s = useStore();
   const { tool, setTool, setDefault, scale, setScale, snapEnabled, setSnap } = s;
+  // accordion: only one section open at a time
+  const [openSec, setOpenSec] = useState('tools');
+  const sec = (id) => ({ open: openSec === id, onToggle: () => setOpenSec((o) => (o === id ? null : id)) });
 
   return (
     <aside className="panel left">
@@ -65,7 +68,7 @@ export default function LeftPanel({ onCollapse }) {
 
       {/* Every tool + wall component lives here (moved out of the header and the
           old Wall Components section). */}
-      <Section title="Tools">
+      <Section title="Tools" {...sec('tools')}>
         <div className="lib-grid">
           {[
             { id: 'select', label: 'Select', sub: 'edit / move', Icon: IconSelect, k: 'V' },
@@ -133,7 +136,7 @@ export default function LeftPanel({ onCollapse }) {
 
       {/* Wall options — contextual to the wall/room/select tools */}
       {(tool === 'wall' || tool === 'room' || tool === 'select') && (
-        <Section title={tool === 'room' ? 'Room Walls' : 'Wall'} defaultOpen={false}>
+        <Section title={tool === 'room' ? 'Room Walls' : 'Wall'} {...sec('wall')}>
           <WallPresetSelect inches={+(s.wallThickness * 12).toFixed(1)}
             onPick={(inches) => setDefault('wallThickness', inches / 12)} />
           <div className="row2">
@@ -162,7 +165,7 @@ export default function LeftPanel({ onCollapse }) {
       )}
 
       {/* Fence options + library */}
-      <Section title="Fence & Gate" defaultOpen={false}>
+      <Section title="Fence & Gate" {...sec('fence')}>
         <div className="lib-grid">
           {Object.entries(FENCE_TYPES).map(([key, ft]) => (
             <div
@@ -254,7 +257,7 @@ export default function LeftPanel({ onCollapse }) {
       </Section>
 
       {/* ---- Configuration (set once; collapsed by default) ---- */}
-      <Section title="Dimensions" defaultOpen={false}>
+      <Section title="Dimensions" {...sec('dims')}>
         <div className="field">
           <label>Show</label>
           <select value={s.dimMode} onChange={(e) => setDefault('dimMode', e.target.value)}>
@@ -273,7 +276,7 @@ export default function LeftPanel({ onCollapse }) {
         </div>
       </Section>
 
-      <Section title="Alignment" defaultOpen={false}>
+      <Section title="Alignment" {...sec('align')}>
         <div className="field">
           <label>Wall line on</label>
           <select value={s.wallJustify} onChange={(e) => setDefault('wallJustify', e.target.value)}>
@@ -293,7 +296,7 @@ export default function LeftPanel({ onCollapse }) {
         <p className="empty-note">Put the wall line on a face so drawn lengths are exact for that side (e.g. a 20&prime; interior).</p>
       </Section>
 
-      <Section title="Layers" defaultOpen={false}>
+      <Section title="Layers" {...sec('layers')}>
         {[
           ['walls', 'Walls', s.walls.length],
           ['openings', 'Doors & Windows', s.openings.length],
@@ -312,7 +315,7 @@ export default function LeftPanel({ onCollapse }) {
         <p className="empty-note" style={{ marginTop: 6 }}>Toggle what's drawn on the plan. Hidden layers also hide in 3D.</p>
       </Section>
 
-      <Section title="Canvas" defaultOpen={false}>
+      <Section title="Canvas" {...sec('canvas')}>
         <div className="field">
           <label>Scale — {scale} px / ft</label>
           <input type="range" min="6" max="30" step="1" value={scale} style={{ width: '100%' }}
