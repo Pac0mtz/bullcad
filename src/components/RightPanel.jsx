@@ -65,6 +65,7 @@ function SelectedProps() {
   const wallHeightDefault = useStore((s) => s.wallHeight);
   const dimOffsetDefault = useStore((s) => s.dimOffset);
   const wallJustify = useStore((s) => s.wallJustify);
+  const dimMode = useStore((s) => s.dimMode);
   const setDefault = useStore((s) => s.setDefault);
   const update = useStore((s) => s.updateElement);
   const del = useStore((s) => s.deleteSelected);
@@ -147,6 +148,16 @@ function SelectedProps() {
             <p className="empty-note" style={{ marginTop: 8 }}>Drag the round corner handle to move joined walls together; the amber ◆ splits off just this wall (or hold Alt).</p>
 
             <div className="prop-subhead">Dimensions</div>
+            <div className="field">
+              <label>Lines <span className="muted">(all walls)</span></label>
+              <select value={dimMode} onChange={(e) => setDefault('dimMode', e.target.value)}>
+                <option value="off">Off</option>
+                <option value="centerline">Centerline</option>
+                <option value="interior">Interior (clear)</option>
+                <option value="exterior">Exterior (overall)</option>
+                <option value="both">Interior + Exterior</option>
+              </select>
+            </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: 'var(--muted)', margin: '2px 0 10px' }}>
               <input type="checkbox" checked={!el.noDim} onChange={(e) => commitSet({ noDim: !e.target.checked })} />
               Show dimensions for this wall
