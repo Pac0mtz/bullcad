@@ -50,22 +50,46 @@ function samplePlan() {
   return { walls, openings, fences, gates, labels: [], stairs: [] };
 }
 
+// ----- autosave: persist the whole project to localStorage so a refresh (or a
+// dev-server reload) never loses work -----
+const PERSIST_KEY = 'planforge:project:v1';
+function serializeProject(s) {
+  const pages = s.pages.map((p) => ({
+    id: p.id, name: p.name,
+    geom: p.id === s.activePage ? geomOf(s) : (s.pageStore[p.id] || emptyGeom()),
+  }));
+  return { v: 1, pages, activePage: s.activePage, settings: { scale: s.scale, grid: s.grid, dimMode: s.dimMode, wallJustify: s.wallJustify } };
+}
+function loadPersisted() {
+  try {
+    const data = JSON.parse(localStorage.getItem(PERSIST_KEY));
+    return data && Array.isArray(data.pages) && data.pages.length ? data : null;
+  } catch { return null; }
+}
+// hydrate initial geometry/pages from autosave when present, else the sample plan
+const _saved = typeof localStorage !== 'undefined' ? loadPersisted() : null;
+const _activeId = _saved ? (_saved.pages.some((p) => p.id === _saved.activePage) ? _saved.activePage : _saved.pages[0].id) : 'page1';
+const _initGeom = _saved ? { ...emptyGeom(), ...((_saved.pages.find((p) => p.id === _activeId) || {}).geom || {}) } : samplePlan();
+const _initPages = _saved ? _saved.pages.map((p) => ({ id: p.id, name: p.name })) : [{ id: 'page1', name: 'Page 1' }];
+const _initPageStore = _saved ? Object.fromEntries(_saved.pages.filter((p) => p.id !== _activeId).map((p) => [p.id, { ...emptyGeom(), ...(p.geom || {}) }])) : {};
+const _initSettings = _saved?.settings || {};
+
 export const useStore = create((set, get) => ({
   // ----- view / tooling -----
   mode: '2d', // '2d' | '3d'
   tool: 'select',
   exportOpen: false, // PDF export options modal
   theme: 'light', // 'light' | 'dark' — UI + canvas appearance (not part of undo history)
-  scale: 12, // pixels per foot
-  grid: 1, // feet per grid cell
+  scale: _initSettings.scale ?? 12, // pixels per foot
+  grid: _initSettings.grid ?? 1, // feet per grid cell
   snapEnabled: true,
 
   // ----- dimensioning -----
-  dimMode: 'exterior', // 'off' | 'centerline' | 'interior' | 'exterior' | 'both'
+  dimMode: _initSettings.dimMode ?? 'exterior', // 'off' | 'centerline' | 'interior' | 'exterior' | 'both'
   dimOffset: 1.0,      // feet between wall face and dimension line
 
   // ----- alignment: where the drawn line sits on the wall/fence body -----
-  wallJustify: 'interior',  // 'center' | 'interior' | 'exterior' — drawn line on the interior face by default
+  wallJustify: _initSettings.wallJustify ?? 'interior',  // 'center' | 'interior' | 'exterior' — drawn line on the interior face by default
   fenceJustify: 'center', // 'center' | 'interior' | 'exterior'
 
   // ----- defaults applied to newly drawn elements -----
@@ -96,12 +120,12 @@ export const useStore = create((set, get) => ({
   gateWidth: 4,
 
   // ----- geometry (the active page's live geometry) -----
-  ...samplePlan(),
+  ..._initGeom,
 
   // ----- pages (multiple plans in one project) -----
-  pages: [{ id: 'page1', name: 'Page 1' }],
-  activePage: 'page1',
-  pageStore: {}, // id -> geometry snapshot for the INACTIVE pages
+  pages: _initPages,
+  activePage: _activeId,
+  pageStore: _initPageStore, // id -> geometry snapshot for the INACTIVE pages
 
   // ----- selection + history -----
   selection: null, // { type:'wall'|'opening'|'fence'|'gate', id }
@@ -401,3 +425,14 @@ export const useStore = create((set, get) => ({
       };
     }),
 }));
+
+// autosave the project to localStorage on any change (debounced)
+if (typeof localStorage !== 'undefined') {
+  let _t;
+  useStore.subscribe((s) => {
+    clearTimeout(_t);
+    _t = setTimeout(() => {
+      try { localStorage.setItem(PERSIST_KEY, JSON.stringify(serializeProject(s))); } catch { /* quota / private mode */ }
+    }, 400);
+  });
+}

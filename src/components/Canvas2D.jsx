@@ -676,10 +676,11 @@ export default function Canvas2D() {
           {[[selWall, walls, 'wallEnd'], [selFence, fences, 'fenceEnd']].map(([segEl, list, kind]) => segEl && (
             <React.Fragment key={kind}>
               {['a', 'b'].map((end) => (
-                <Circle key={end} x={segEl[end].x * scale} y={segEl[end].y * scale} radius={coarse ? 10 : 6}
-                  fill="#fff" stroke={BLUE} strokeWidth={2} hitStrokeWidth={coarse ? 22 : 10}
+                <Group key={end} x={segEl[end].x * scale} y={segEl[end].y * scale} scaleX={1 / view.k} scaleY={1 / view.k}
                   onMouseDown={startHandle({ kind, id: segEl.id, end, origin: { ...segEl[end] } })}
-                  onTouchStart={startHandle({ kind, id: segEl.id, end, origin: { ...segEl[end] } })} />
+                  onTouchStart={startHandle({ kind, id: segEl.id, end, origin: { ...segEl[end] } })}>
+                  <Circle radius={coarse ? 10 : 6} fill="#fff" stroke={BLUE} strokeWidth={2} hitStrokeWidth={coarse ? 22 : 10} />
+                </Group>
               ))}
               {['a', 'b'].map((end) => {
                 const pt = segEl[end];
@@ -694,7 +695,7 @@ export default function Canvas2D() {
                 const s = coarse ? 9 : 6.5;
                 const setCur = (c) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = c; };
                 return (
-                  <Group key={'sp' + end} x={hx} y={hy} onMouseDown={start} onTouchStart={start} onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
+                  <Group key={'sp' + end} x={hx} y={hy} scaleX={1 / view.k} scaleY={1 / view.k} onMouseDown={start} onTouchStart={start} onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
                     <Line points={[0, -s, s, 0, 0, s, -s, 0]} closed fill="#fff" stroke="#f59e0b" strokeWidth={2} hitStrokeWidth={coarse ? 24 : 12} />
                     <Line points={[-s * 0.4, 0, s * 0.4, 0]} stroke="#f59e0b" strokeWidth={1.5} listening={false} />
                   </Group>
