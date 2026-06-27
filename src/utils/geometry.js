@@ -297,9 +297,24 @@ export function justifiedSegments(segs, justify, centroid, thicknessOf) {
       const other = end === 'a' ? 'b' : 'a';
       let ox = s[end].x - s[other].x, oy = s[end].y - s[other].y; // direction into the junction
       const oL = Math.hypot(ox, oy) || 1; ox /= oL; oy /= oL;
-      const ix = lineIntersect(r[end], lines.get(s.id).d, through.a, lines.get(through.id).d) || r[end];
-      const ext = thicknessOf(through) / 2 + 0.02;
-      r[end] = { x: ix.x + ox * ext, y: ix.y + oy * ext };
+      // Extend to the through-wall's far BAND FACE, not just past its centerline.
+      // The through-wall band is offset by its own justify, so a fixed thickness/2
+      // overshoots (interior approach) or undershoots (exterior approach) — instead
+      // intersect the abutting line with each band face and stop at the far one.
+      const dAbut = lines.get(s.id).d, dT = lines.get(through.id).d, thT = thicknessOf(through);
+      const offT = centered ? { x: 0, y: 0 } : justifyOffsetVec(through.a, through.b, thT, justify, centroid);
+      const cT = { x: through.a.x + offT.x, y: through.a.y + offT.y };
+      const nT = { x: -dT.y, y: dT.x };
+      let best = null, bestProj = -Infinity;
+      for (const sgn of [-1, 1]) {
+        const face = { x: cT.x + nT.x * sgn * thT / 2, y: cT.y + nT.y * sgn * thT / 2 };
+        const ix = lineIntersect(r[end], dAbut, face, dT);
+        if (!ix) continue;
+        const proj = (ix.x - s[end].x) * ox + (ix.y - s[end].y) * oy; // how far along the approach
+        if (proj > bestProj) { bestProj = proj; best = ix; }
+      }
+      if (!best) continue;
+      r[end] = { x: best.x + ox * 0.02, y: best.y + oy * 0.02 };
       r[end + 'Joined'] = true;
     }
   }
