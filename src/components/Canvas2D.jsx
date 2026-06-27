@@ -438,6 +438,19 @@ export default function Canvas2D() {
         store.updateElement(d.kind, d.id, { t });
         setGuides(gs);
       }
+    } else if (d.kind === 'openingWidth' || d.kind === 'gateWidth') {
+      // resize a door/window/gate by dragging an edge — center stays put, both
+      // jambs move symmetrically; snap to 1/4" so half/quarter inches are reachable
+      const type = d.kind === 'openingWidth' ? 'opening' : 'gate';
+      const host = (type === 'opening' ? walls : fences).find((x) => x.id === d.hostId);
+      if (host) {
+        const L = dist(host.a, host.b) || 1;
+        const ux = (host.b.x - host.a.x) / L, uy = (host.b.y - host.a.y) / L;
+        let half = Math.abs((raw.x - d.center.x) * ux + (raw.y - d.center.y) * uy);
+        let width = Math.max(0.5, Math.min(L, half * 2));
+        if (snapEnabled) { const Q = 1 / 48; width = Math.round(width / Q) * Q; } // 1/4 inch
+        store.updateElement(type, d.id, { width });
+      }
     } else if (d.kind === 'stair') {
       const pt = snapEnabled ? snapPt(raw, minorStep) : raw;
       store.updateElement('stair', d.id, { x: pt.x, y: pt.y });
@@ -541,6 +554,19 @@ export default function Canvas2D() {
 
   const selWall = selection?.type === 'wall' ? walls.find((w) => w.id === selection.id) : null;
   const selFence = selection?.type === 'fence' ? fences.find((f) => f.id === selection.id) : null;
+  const selOpening = selection?.type === 'opening' ? openings.find((o) => o.id === selection.id) : null;
+  const selGate = selection?.type === 'gate' ? gates.find((g) => g.id === selection.id) : null;
+
+  // every wall + fence corner, deduped — drawn as a small gray grip that's always
+  // visible (turns blue when its element is selected, via the handles below)
+  const cornerDots = useMemo(() => {
+    const seen = new Set(), pts = [];
+    [...walls, ...fences].forEach((e) => [e.a, e.b].forEach((p) => {
+      const k = `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
+      if (!seen.has(k)) { seen.add(k); pts.push(p); }
+    }));
+    return pts;
+  }, [walls, fences]);
 
   // building center — tells interior from exterior for dimensioning + alignment
   const wallCentroid = useMemo(() => centroidOf(walls.flatMap((w) => [w.a, w.b])), [walls]);
@@ -684,6 +710,16 @@ export default function Canvas2D() {
             })}
           </Group>}
 
+          {/* always-visible gray corner grips on every wall + fence corner
+              (the selected element's corners get blue handles on top, below) */}
+          <Group listening={false}>
+            {cornerDots.map((p, i) => (
+              <Group key={'cd' + i} x={p.x * scale} y={p.y * scale} scaleX={1 / view.k} scaleY={1 / view.k}>
+                <Circle radius={coarse ? 6 : 4.5} fill="#94a3b8" stroke="#fff" strokeWidth={1} />
+              </Group>
+            ))}
+          </Group>
+
           {/* selected wall/fence endpoint handles — round blue = move the whole
               joined corner; amber diamond (only at shared corners, pulled into
               the segment) = split off and move just this segment */}
@@ -717,6 +753,38 @@ export default function Canvas2D() {
               })}
             </React.Fragment>
           ))}
+
+          {/* width-resize handles on a selected door / window / opening or gate —
+              drag a jamb to resize (center stays put; snaps to 1/4") */}
+          {[[selOpening, 'opening', walls, wallSegs], [selGate, 'gate', fences, fenceSegs]].map(([el, type, hosts, segs]) => el && (() => {
+            const hostId = type === 'opening' ? el.wallId : el.fenceId;
+            const host = hosts.find((h) => h.id === hostId);
+            if (!host) return null;
+            const seg = segs.get(host.id);
+            const a = seg?.a || host.a, b = seg?.b || host.b;
+            const L = dist(a, b) || 1;
+            const ux = (b.x - a.x) / L, uy = (b.y - a.y) / L;
+            const center = lerp(a, b, el.t);
+            const angDeg = Math.atan2(uy, ux) * 180 / Math.PI;
+            const kind = type === 'opening' ? 'openingWidth' : 'gateWidth';
+            const setCur = (c) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = c; };
+            return (
+              <React.Fragment key={'wz' + el.id}>
+                {[-1, 1].map((sgn) => {
+                  const ex = (center.x + ux * sgn * el.width / 2) * scale;
+                  const ey = (center.y + uy * sgn * el.width / 2) * scale;
+                  const start = startHandle({ kind, id: el.id, hostId, center: { ...center } });
+                  return (
+                    <Group key={sgn} x={ex} y={ey} rotation={angDeg} scaleX={1 / view.k} scaleY={1 / view.k}
+                      onMouseDown={start} onTouchStart={start} onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
+                      <Rect x={coarse ? -4 : -3} y={coarse ? -11 : -8} width={coarse ? 8 : 6} height={coarse ? 22 : 16}
+                        fill="#fff" stroke={BLUE} strokeWidth={2} cornerRadius={2} hitStrokeWidth={coarse ? 22 : 12} />
+                    </Group>
+                  );
+                })}
+              </React.Fragment>
+            );
+          })())}
 
           {/* room area labels */}
           {rooms.map((rm, i) => {
