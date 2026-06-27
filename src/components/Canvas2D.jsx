@@ -42,6 +42,16 @@ export default function Canvas2D() {
   const pan = useRef(null);
   const coarse = useMemo(() => typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches, []);
 
+  // Adaptive grid: subdivide the 1-ft grid into 6"/3"/1" cells as you zoom in, so
+  // the grid (and snapping) work at inch precision. `minorStep` is in feet.
+  const pxPerCell = scale * view.k * grid;
+  const minorStep =
+    pxPerCell >= 110 ? grid / 12 : // 1 in  (grid = 1 ft)
+    pxPerCell >= 48 ? grid / 4 :   // 3 in
+    pxPerCell >= 24 ? grid / 2 :   // 6 in
+    grid;                          // 1 ft
+  const stepLabel = minorStep >= 1 ? `${minorStep} ft` : `${Math.round(minorStep * 12)} in`;
+
   // ---- size to container ----
   useEffect(() => {
     const el = wrapRef.current;
@@ -83,7 +93,7 @@ export default function Canvas2D() {
       const ratio = dist / p.dist, pcx = p.cx, pcy = p.cy, mx = m.x, my = m.y;
       setView((v) => {
         const Wx = (pcx - r.left - v.x) / v.k, Wy = (pcy - r.top - v.y) / v.k;
-        const k1 = Math.max(0.2, Math.min(5, v.k * ratio));
+        const k1 = Math.max(0.2, Math.min(16, v.k * ratio));
         return { k: k1, x: (mx - r.left) - Wx * k1, y: (my - r.top) - Wy * k1 };
       });
       p.dist = dist; p.cx = m.x; p.cy = m.y;
@@ -155,7 +165,7 @@ export default function Canvas2D() {
       const dx = host.b.x - host.a.x, dy = host.b.y - host.a.y, hl = Math.hypot(dx, dy) || 1;
       return { x: onSeg.x, y: onSeg.y, onNode: true, onWall: true, wallDir: { x: dx / hl, y: dy / hl } };
     }
-    return { ...snapPt(pt, grid), onNode: false };
+    return { ...snapPt(pt, minorStep), onNode: false };
   };
 
   // draw point for wall/fence: snap to grid/nodes, then (when Shift is held mid
@@ -258,12 +268,12 @@ export default function Canvas2D() {
       setMeasure((m) => (m.length >= 2 ? [raw] : [...m, raw]));
     } else if (tool === 'label') {
       // anchor the callout at the clicked spot, then drop into Select to drag it
-      const pt = snapEnabled ? snapPt(raw, grid) : raw;
+      const pt = snapEnabled ? snapPt(raw, minorStep) : raw;
       const id = store.addLabel(pt);
       store.setTool('select');
       store.select({ type: 'label', id });
     } else if (tool === 'stairs') {
-      const pt = snapEnabled ? snapPt(raw, grid) : raw;
+      const pt = snapEnabled ? snapPt(raw, minorStep) : raw;
       const id = store.addStair(pt);
       store.setTool('select');
       store.select({ type: 'stair', id });
@@ -271,7 +281,7 @@ export default function Canvas2D() {
       // click to zoom in at the point; Alt/Shift-click to zoom out
       const ptr = stageRef.current.getPointerPosition();
       const k0 = view.k;
-      const k1 = Math.max(0.2, Math.min(5, k0 * (e.evt.altKey || e.evt.shiftKey ? 1 / 1.4 : 1.4)));
+      const k1 = Math.max(0.2, Math.min(16, k0 * (e.evt.altKey || e.evt.shiftKey ? 1 / 1.4 : 1.4)));
       const wx = (ptr.x - view.x) / k0, wy = (ptr.y - view.y) / k0;
       setView({ k: k1, x: ptr.x - wx * k1, y: ptr.y - wy * k1 });
     }
@@ -327,7 +337,7 @@ export default function Canvas2D() {
     const stage = stageRef.current;
     const ptr = stage.getPointerPosition();
     const k0 = view.k;
-    const k1 = Math.max(0.2, Math.min(5, k0 * (e.evt.deltaY < 0 ? 1.1 : 1 / 1.1)));
+    const k1 = Math.max(0.2, Math.min(16, k0 * (e.evt.deltaY < 0 ? 1.1 : 1 / 1.1)));
     const wx = (ptr.x - view.x) / k0;
     const wy = (ptr.y - view.y) / k0;
     setView({ k: k1, x: ptr.x - wx * k1, y: ptr.y - wy * k1 });
@@ -396,7 +406,7 @@ export default function Canvas2D() {
         const jointSet = new Set(d.joints.map((j) => j.id + j.end));
         const others = list.flatMap((e) => ['a', 'b'].filter((end) => !jointSet.has(e.id + end)).map((end) => e[end]));
         const n = snapToNodes(raw, others, 0.8);
-        pt = n.snapped ? { x: n.x, y: n.y } : snapPt(raw, grid);
+        pt = n.snapped ? { x: n.x, y: n.y } : snapPt(raw, minorStep);
       }
       store.moveJoints(type, d.joints, pt);
     } else if (d.kind === 'wallMove' || d.kind === 'fenceMove') {
@@ -414,7 +424,7 @@ export default function Canvas2D() {
           d.jointsA = jointsAt(d.origA); d.jointsB = jointsAt(d.origB);
         }
         let off = (raw.x - d.start.x) * d.perp.x + (raw.y - d.start.y) * d.perp.y;
-        if (snapEnabled) off = Math.round(off / grid) * grid;
+        if (snapEnabled) off = Math.round(off / minorStep) * minorStep;
         store.moveJoints(type, d.jointsA, { x: d.origA.x + d.perp.x * off, y: d.origA.y + d.perp.y * off });
         store.moveJoints(type, d.jointsB, { x: d.origB.x + d.perp.x * off, y: d.origB.y + d.perp.y * off });
       }
@@ -426,7 +436,7 @@ export default function Canvas2D() {
         setGuides(gs);
       }
     } else if (d.kind === 'stair') {
-      const pt = snapEnabled ? snapPt(raw, grid) : raw;
+      const pt = snapEnabled ? snapPt(raw, minorStep) : raw;
       store.updateElement('stair', d.id, { x: pt.x, y: pt.y });
     } else if (d.kind === 'stairWidth' || d.kind === 'stairRun' || d.kind === 'stairRotate') {
       const stp = stairs.find((x) => x.id === d.id);
@@ -453,7 +463,7 @@ export default function Canvas2D() {
     } else if (d.kind === 'labelPos') {
       store.updateElement('label', d.id, { pos: { x: raw.x, y: raw.y } });
     } else if (d.kind === 'labelAnchor') {
-      const pt = snapEnabled ? snapPt(raw, grid) : raw;
+      const pt = snapEnabled ? snapPt(raw, minorStep) : raw;
       store.updateElement('label', d.id, { anchor: { x: pt.x, y: pt.y } });
     } else if (d.kind === 'dimOffset') {
       const wl = d.wall;
@@ -468,7 +478,7 @@ export default function Canvas2D() {
 
   // ---------------- view helpers ----------------
   const zoomBy = (m) => setView((v) => {
-    const k1 = Math.max(0.2, Math.min(5, v.k * m));
+    const k1 = Math.max(0.2, Math.min(16, v.k * m));
     const cx = size.w / 2, cy = size.h / 2;
     const wx = (cx - v.x) / v.k, wy = (cy - v.y) / v.k;
     return { k: k1, x: cx - wx * k1, y: cy - wy * k1 };
@@ -494,19 +504,31 @@ export default function Canvas2D() {
   // ---------------- grid lines ----------------
   const gridLines = useMemo(() => {
     const lines = [];
-    const span = 160; // feet each way
-    for (let i = -span; i <= span; i += grid) {
-      const major = i % 5 === 0;
-      lines.push(<Line key={'v' + i} points={[i * scale, -span * scale, i * scale, span * scale]}
-        stroke={major ? t.gridMajor : t.gridMinor} strokeWidth={major ? 1 : 0.5} />);
-      lines.push(<Line key={'h' + i} points={[-span * scale, i * scale, span * scale, i * scale]}
-        stroke={major ? t.gridMajor : t.gridMinor} strokeWidth={major ? 1 : 0.5} />);
+    const pxPerFt = scale * view.k;
+    // only build lines across the visible viewport (+ margin) so the fine inch
+    // grid stays cheap when zoomed in
+    const m = 2; // ft margin
+    const left = Math.floor((-view.x) / pxPerFt) - m, right = Math.ceil((size.w - view.x) / pxPerFt) + m;
+    const top = Math.floor((-view.y) / pxPerFt) - m, bottom = Math.ceil((size.h - view.y) / pxPerFt) + m;
+    const isMul = (v, k) => Math.abs(v / k - Math.round(v / k)) < 1e-4;
+    const stroke = (onFoot, onFive) => onFive ? t.gridMajor : onFoot ? t.gridMajor : t.gridMinor;
+    const width = (onFoot, onFive) => onFive ? 1.2 : onFoot ? 0.9 : 0.5; // screen px (strokeScaleEnabled off)
+    const x0 = Math.floor(left / minorStep) * minorStep, y0 = Math.floor(top / minorStep) * minorStep;
+    for (let x = x0; x <= right + 1e-6; x += minorStep) {
+      const f = isMul(x, 1), f5 = isMul(x, 5);
+      lines.push(<Line key={'v' + x.toFixed(3)} points={[x * scale, top * scale, x * scale, bottom * scale]}
+        stroke={stroke(f, f5)} strokeWidth={width(f, f5)} opacity={f ? 1 : 0.6} strokeScaleEnabled={false} />);
+    }
+    for (let y = y0; y <= bottom + 1e-6; y += minorStep) {
+      const f = isMul(y, 1), f5 = isMul(y, 5);
+      lines.push(<Line key={'h' + y.toFixed(3)} points={[left * scale, y * scale, right * scale, y * scale]}
+        stroke={stroke(f, f5)} strokeWidth={width(f, f5)} opacity={f ? 1 : 0.6} strokeScaleEnabled={false} />);
     }
     // axes
-    lines.push(<Line key="ax" points={[-span * scale, 0, span * scale, 0]} stroke={t.axis} strokeWidth={1.2} />);
-    lines.push(<Line key="ay" points={[0, -span * scale, 0, span * scale]} stroke={t.axis} strokeWidth={1.2} />);
+    lines.push(<Line key="ax" points={[left * scale, 0, right * scale, 0]} stroke={t.axis} strokeWidth={1.4} strokeScaleEnabled={false} />);
+    lines.push(<Line key="ay" points={[0, top * scale, 0, bottom * scale]} stroke={t.axis} strokeWidth={1.4} strokeScaleEnabled={false} />);
     return lines;
-  }, [grid, scale, t]);
+  }, [minorStep, scale, t, view, size]);
 
   const cursorPx = cursor ? { x: cursor.x * scale, y: cursor.y * scale } : null;
   const showDraftPreview = draft && cursor && ['wall', 'fence'].includes(tool);
@@ -816,7 +838,7 @@ export default function Canvas2D() {
       </div>
 
       <div className="compass-control"><Compass size={50} /></div>
-      <div className="scale-readout">1 grid = 1 ft &nbsp;·&nbsp; {Math.round(view.k * 100)}%<span className="sr-pan">&nbsp;·&nbsp; pan: Space-drag / middle-mouse</span></div>
+      <div className="scale-readout">grid = {stepLabel} &nbsp;·&nbsp; {Math.round(view.k * 100)}%<span className="sr-pan">&nbsp;·&nbsp; pan: Space-drag / middle-mouse</span></div>
 
       {/* compact length entry — anchored to the last placed point (stays put
           while you aim, so the ✓ stays clickable/tappable) */}
