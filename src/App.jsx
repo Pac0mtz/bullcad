@@ -20,9 +20,14 @@ export default function App() {
   const redo = useStore((s) => s.redo);
   const deleteSelected = useStore((s) => s.deleteSelected);
   const setTool = useStore((s) => s.setTool);
+  const tool = useStore((s) => s.tool);
   const fileRef = useRef(null);
   // which side panel is open as an overlay drawer (mobile only)
   const [drawer, setDrawer] = useState(null); // 'left' | 'right' | null
+
+  // mobile: picking a tool closes the Tools/Properties drawer so the canvas is
+  // immediately usable (no extra tap to dismiss). No-op on desktop (drawer null).
+  useEffect(() => { setDrawer(null); }, [tool]);
   // desktop: collapse a side panel out of view to give the canvas more room
   const [leftHidden, setLeftHidden] = useState(false);
   const [rightHidden, setRightHidden] = useState(false);

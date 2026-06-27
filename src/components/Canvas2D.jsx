@@ -285,7 +285,10 @@ export default function Canvas2D() {
     if (drag.current) return; // a handle started a drag — don't begin a pan
     if (e.evt.touches.length === 1 && !pinch.current) {
       const t = e.evt.touches[0];
-      touch.current = { mode: null, sx: t.clientX, sy: t.clientY, lx: t.clientX, ly: t.clientY };
+      // Apple Pencil / stylus draws precisely and never pans — finger pans.
+      const pen = t.touchType === 'stylus';
+      touch.current = { mode: pen ? 'pen' : null, pen, sx: t.clientX, sy: t.clientY, lx: t.clientX, ly: t.clientY };
+      if (pen) { const raw = getFeet(); if (raw && ['wall', 'fence', 'room'].includes(tool)) setCursor(drawPt(raw)); }
     }
   };
   const onTouchMove = (e) => {
@@ -294,6 +297,13 @@ export default function Canvas2D() {
     if (pinch.current) return; // two-finger pinch owns the gesture
     const c = touch.current, ts = e.evt.touches; if (!c || ts.length !== 1) return;
     const t = ts[0];
+    // pencil down: keep the rubber-band preview under the tip, but never pan
+    if (c.pen) {
+      e.evt.preventDefault();
+      const raw = getFeet();
+      if (raw && ['wall', 'fence', 'room'].includes(tool)) setCursor(drawPt(raw));
+      return;
+    }
     if (c.mode === null && Math.hypot(t.clientX - c.sx, t.clientY - c.sy) > 8) c.mode = 'pan';
     if (c.mode === 'pan') {
       e.evt.preventDefault();
@@ -724,6 +734,20 @@ export default function Canvas2D() {
             </Group>
           )}
 
+          {/* touch anchor reticle — after the first tap, a target marker sits on the
+              start point so it's obvious where the run is anchored (paired with the
+              on-screen coach hint below) */}
+          {coarse && draft && ['wall', 'fence', 'room'].includes(tool) && (
+            <Group x={draft.x * scale} y={draft.y * scale} scaleX={1 / view.k} scaleY={1 / view.k} listening={false}>
+              <Circle radius={18} stroke={TEAL} strokeWidth={1.5} opacity={0.45} />
+              <Circle radius={11} stroke={TEAL} strokeWidth={2} />
+              {[[0, -18, 0, -7], [0, 18, 0, 7], [-18, 0, -7, 0], [18, 0, 7, 0]].map((p, i) => (
+                <Line key={i} points={p} stroke={TEAL} strokeWidth={2} lineCap="round" />
+              ))}
+              <Circle radius={2.5} fill={TEAL} />
+            </Group>
+          )}
+
           {/* room draft preview */}
           {tool === 'room' && draft && cursor && (() => {
             const x0 = draft.x, y0 = draft.y, x1 = cursor.x, y1 = cursor.y;
@@ -821,6 +845,14 @@ export default function Canvas2D() {
           {tool === 'room'
             ? (coarse ? 'Tap one corner, then the opposite' : 'Click one corner, then the opposite')
             : (coarse ? `Tap to start the ${tool} · tap each corner` : `Click to start the ${tool}`)}
+        </div>
+      )}
+
+      {/* touch coach — once a run is anchored, explain how to continue/finish */}
+      {coarse && draft && (tool === 'wall' || tool === 'fence') && (
+        <div className="draw-coach">
+          <strong>{tool === 'wall' ? 'Wall' : 'Fence'} started</strong>
+          Tap the next corner to extend · drag the plan to pan · double-tap to finish
         </div>
       )}
 

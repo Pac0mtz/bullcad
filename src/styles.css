@@ -477,6 +477,20 @@ body {
   50% { box-shadow: var(--shadow-lg), 0 0 0 5px rgba(20,184,166,0.12); }
 }
 
+/* touch coach — sits low (above the bottom drawer toggles) once a run starts */
+.draw-coach {
+  position: absolute;
+  bottom: 76px; left: 50%; transform: translateX(-50%);
+  z-index: 9;
+  max-width: min(90vw, 360px); text-align: center;
+  background: rgba(10, 37, 64, 0.92); color: #fff;
+  font-size: 12px; line-height: 1.45;
+  padding: 8px 16px; border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+}
+.draw-coach strong { display: block; color: var(--teal); font-size: 12.5px; margin-bottom: 1px; }
+
 /* compact length-entry HUD — floats next to the point being drawn */
 .len-entry {
   position: absolute;
