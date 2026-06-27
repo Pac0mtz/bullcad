@@ -480,13 +480,19 @@ body {
 }
 .len-entry input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 2px rgba(20,184,166,0.25); }
 .len-entry .le-finish {
-  width: 24px; height: 24px; padding: 0;
-  display: grid; place-items: center;
+  height: 24px; padding: 0 10px;
+  display: inline-flex; align-items: center; gap: 4px;
   border: none; border-radius: 6px;
   background: var(--teal); color: #03201c;
-  font-size: 14px; font-weight: 700; cursor: pointer;
+  font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
 }
 .len-entry .le-finish:hover { filter: brightness(1.06); }
+/* touch: bigger tap targets so the field and End button are easy to hit */
+@media (pointer: coarse) {
+  .len-entry { gap: 6px; padding: 5px 5px 5px 7px; border-radius: 10px; }
+  .len-entry input { width: 74px; height: 36px; font-size: 14px; }
+  .len-entry .le-finish { height: 36px; padding: 0 14px; font-size: 13.5px; }
+}
 
 .scale-readout {
   position: absolute;

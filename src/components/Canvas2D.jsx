@@ -742,12 +742,15 @@ export default function Canvas2D() {
       <div className="compass-control"><Compass size={50} /></div>
       <div className="scale-readout">1 grid = 1 ft &nbsp;·&nbsp; {Math.round(view.k * 100)}%<span className="sr-pan">&nbsp;·&nbsp; pan: Space-drag / middle-mouse</span></div>
 
-      {/* compact length entry — floats next to the point being drawn; type a
-          length + Enter to place, ✓ to finish */}
+      {/* compact length entry — anchored to the last placed point (stays put
+          while you aim, so the ✓ stays clickable/tappable) */}
       {draft && (tool === 'wall' || tool === 'fence') && (() => {
-        const p = cursor || draft;
+        const p = draft;
+        const px = view.x + p.x * scale * view.k;
+        const py = Math.max(28, Math.min(size.h - 28, view.y + p.y * scale * view.k));
+        const flipLeft = px > size.w - 180; // not enough room on the right → put it on the left
         return (
-          <div className="len-entry" style={{ left: view.x + p.x * scale * view.k, top: view.y + p.y * scale * view.k, right: 'auto', bottom: 'auto', transform: 'translate(16px, -48px)' }}>
+          <div className="len-entry" style={{ left: px, top: py, right: 'auto', bottom: 'auto', transform: flipLeft ? 'translate(calc(-100% - 14px), -50%)' : 'translate(14px, -50%)' }}>
             <input ref={lenInputRef} type="text" inputMode="decimal" value={lenStr}
               placeholder={cursor ? formatFeetInches(dist(draft, cursor)) : '—'}
               onChange={(e) => setLenStr(e.target.value)}
@@ -755,7 +758,7 @@ export default function Canvas2D() {
                 if (e.key === 'Enter') { e.preventDefault(); commitTypedLength(); }
                 else if (e.key === 'Escape') { e.preventDefault(); finishRun(false); e.currentTarget.blur(); }
               }} />
-            <button className="le-finish" onMouseDown={(e) => { e.preventDefault(); finishRun(true); }} title="Finish (Enter on empty, or double-click)">✓</button>
+            <button className="le-finish" onMouseDown={(e) => { e.preventDefault(); finishRun(true); }} title="Finish (Enter on empty, or double-click)">✓ End {tool === 'wall' ? 'wall' : 'fence'}</button>
           </div>
         );
       })()}
