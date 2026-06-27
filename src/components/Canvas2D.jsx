@@ -145,6 +145,13 @@ export default function Canvas2D() {
     if (!snapEnabled) return pt;
     const n = snapToNodes(pt, allNodes, 0.8);
     if (n.snapped) return { x: n.x, y: n.y, onNode: true };
+    // snap onto a wall/fence mid-span so you can tie into a wall (T-junction)
+    let onSeg = null, bestD = 0.5;
+    for (const s of [...walls, ...fences]) {
+      const pr = projectOnSegment(pt, s.a, s.b);
+      if (pr.t > 0.03 && pr.t < 0.97 && pr.distance < bestD) { bestD = pr.distance; onSeg = pr.point; }
+    }
+    if (onSeg) return { x: onSeg.x, y: onSeg.y, onNode: true };
     return { ...snapPt(pt, grid), onNode: false };
   };
 

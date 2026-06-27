@@ -280,6 +280,29 @@ export function justifiedSegments(segs, justify, centroid, thicknessOf) {
     r1[m1.end + 'Joined'] = true;
     r2[m2.end + 'Joined'] = true;
   }
+  // T-junctions: a wall end that lands mid-span of another wall — extend it into
+  // the through-wall so the bands merge cleanly instead of leaving an offset gap
+  for (const s of segs) {
+    const r = out.get(s.id);
+    for (const end of ['a', 'b']) {
+      if (r[end + 'Joined']) continue; // already mitered at a 2-way corner
+      const P = s[end];
+      let through = null;
+      for (const o of segs) {
+        if (o.id === s.id) continue;
+        const pr = projectOnSegment(P, o.a, o.b);
+        if (pr.distance < 0.12 && pr.t > 0.02 && pr.t < 0.98) { through = o; break; }
+      }
+      if (!through) continue;
+      const other = end === 'a' ? 'b' : 'a';
+      let ox = s[end].x - s[other].x, oy = s[end].y - s[other].y; // direction into the junction
+      const oL = Math.hypot(ox, oy) || 1; ox /= oL; oy /= oL;
+      const ix = lineIntersect(r[end], lines.get(s.id).d, through.a, lines.get(through.id).d) || r[end];
+      const ext = thicknessOf(through) / 2 + 0.02;
+      r[end] = { x: ix.x + ox * ext, y: ix.y + oy * ext };
+      r[end + 'Joined'] = true;
+    }
+  }
   return out;
 }
 
