@@ -660,9 +660,23 @@ export default function Canvas2D() {
     const cx = ((minX + maxX) / 2) * scale, cy = ((minY + maxY) / 2) * scale;
     setView({ k, x: size.w / 2 - cx * k, y: size.h / 2 - cy * k });
   };
-  // fit once on mount
+  // Responsive view: fit once on mount; on later viewport changes either re-fit
+  // (a big resize or a portrait⇄landscape flip — e.g. rotating a phone) or just
+  // keep the same world point centered (minor resizes) so the plan never slides
+  // off-screen and the user's zoom is preserved when it shouldn't change.
   const didFit = useRef(false);
-  useEffect(() => { if (!didFit.current && size.w > 100) { didFit.current = true; setTimeout(fitView, 0); } }, [size.w]);
+  const prevSize = useRef(size);
+  useEffect(() => {
+    if (size.w <= 100) return;
+    if (!didFit.current) { didFit.current = true; prevSize.current = size; setTimeout(fitView, 0); return; }
+    const ps = prevSize.current;
+    if (ps.w === size.w && ps.h === size.h) return;
+    const aspectFlip = (ps.w >= ps.h) !== (size.w >= size.h);
+    const bigChange = Math.abs(size.w - ps.w) > ps.w * 0.35 || Math.abs(size.h - ps.h) > ps.h * 0.35;
+    if (aspectFlip || bigChange) fitView();
+    else setView((v) => ({ ...v, x: v.x + (size.w - ps.w) / 2, y: v.y + (size.h - ps.h) / 2 }));
+    prevSize.current = size;
+  }, [size]);
 
   // ---------------- grid lines ----------------
   // Grid drawn as ONE Konva Shape (a single canvas pass, batched by line type)
