@@ -857,11 +857,12 @@ export default function Canvas2D() {
           {layers.fences && posts.map((p) => {
             const f = fences.find((x) => x.id === p.fenceId);
             return (
-              <PostShape key={p.id} post={p} fence={f} scale={scale} palette={t} seg={f ? fenceSegs.get(f.id) : null} selected={selection?.id === p.id}
+              <PostShape key={p.id} post={p} fence={f} scale={scale} palette={t} seg={f ? fenceSegs.get(f.id) : null} selected={selection?.id === p.id} zoom={view.k}
                 onSelect={(e) => {
                   e.cancelBubble = true;
                   if (tool === 'select') { store.select({ type: 'post', id: p.id }); startHandle({ kind: 'post', id: p.id, hostId: p.fenceId })(e); }
-                }} />
+                }}
+                onDelete={() => store.deleteElement('post', p.id)} />
             );
           })}
 

@@ -57,6 +57,9 @@ export default function ElevationCanvas() {
   const selection = useStore((s) => s.selection);
   const update = useStore((s) => s.updateElement);
   const select = useStore((s) => s.select);
+  const deleteElement = useStore((s) => s.deleteElement);
+  const addPost = useStore((s) => s.addPost);
+  const spacePostsEvenly = useStore((s) => s.spacePostsEvenly);
   const close = useStore((s) => s.closeElevation);
   const stepElevation = useStore((s) => s.stepElevation);
   const theme = useStore((s) => s.theme);
@@ -238,19 +241,41 @@ export default function ElevationCanvas() {
 
   // individually-placed posts on this fence — draggable horizontally to reposition
   const fencePosts = isWall ? [] : posts.filter((p) => p.fenceId === el.id);
+  const moveArrows = [[0, -6, 0, 6], [-6, 0, 6, 0], [0, -6, -2.2, -3.4], [0, -6, 2.2, -3.4], [0, 6, -2.2, 3.4], [0, 6, 2.2, 3.4], [-6, 0, -3.4, -2.2], [-6, 0, -3.4, 2.2], [6, 0, 3.4, -2.2], [6, 0, 3.4, 2.2]];
   const drawPost = (p) => {
     const seld = selection?.type === 'post' && selection.id === p.id;
     const ph = Math.min(Hgt, p.height || Hgt);
     const pwpx = Math.max(4, 0.4 * k); // ~0.4 ft post body
     const cx = X(p.t * L);
+    const setCur = (cur) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = cur; };
     return (
-      <Rect key={p.id} x={cx - pwpx / 2} y={Y(ph)} width={pwpx} height={ph * k}
-        fill={p.color || C.line} stroke={seld ? HILITE : C.line} strokeWidth={seld ? 2 : 1} strokeScaleEnabled={false}
-        cornerRadius={1} draggable
-        onMouseDown={(e) => { e.cancelBubble = true; select({ type: 'post', id: p.id }); onStart(); }}
-        dragBoundFunc={(pos) => ({ x: clamp(pos.x, X(0) - pwpx / 2, X(L) - pwpx / 2), y: Y(ph) })}
-        onDragMove={(e) => { const center = (e.target.x() + pwpx / 2 - originX) / k; queueUpdate('post', p.id, { t: clamp(center / L, 0, 1) }); }}
-        onDragEnd={onEnd} />
+      <React.Fragment key={p.id}>
+        <Rect x={cx - pwpx / 2} y={Y(ph)} width={pwpx} height={ph * k}
+          fill={p.color || C.line} stroke={seld ? HILITE : C.line} strokeWidth={seld ? 2 : 1} strokeScaleEnabled={false}
+          cornerRadius={1} draggable
+          onMouseDown={(e) => { e.cancelBubble = true; select({ type: 'post', id: p.id }); onStart(); }}
+          dragBoundFunc={(pos) => ({ x: clamp(pos.x, X(0) - pwpx / 2, X(L) - pwpx / 2), y: Y(ph) })}
+          onDragMove={(e) => { const center = (e.target.x() + pwpx / 2 - originX) / k; queueUpdate('post', p.id, { t: clamp(center / L, 0, 1) }); }}
+          onDragEnd={onEnd} />
+        {seld && (
+          <>
+            {/* move handle: drag to slide the post along the run */}
+            <Group x={cx} y={Y(ph) - 16} draggable onMouseDown={(e) => { e.cancelBubble = true; onStart(); }}
+              dragBoundFunc={(pos) => ({ x: clamp(pos.x, X(0), X(L)), y: Y(ph) - 16 })}
+              onDragMove={(e) => queueUpdate('post', p.id, { t: clamp((e.target.x() - originX) / k / L, 0, 1) })}
+              onDragEnd={onEnd} onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
+              <Circle radius={11} fill={HILITE} stroke="#fff" strokeWidth={2} />
+              {moveArrows.map((pt, i) => <Line key={i} points={pt} stroke="#fff" strokeWidth={1.6} lineCap="round" listening={false} />)}
+            </Group>
+            {/* delete ✕ */}
+            <Group x={cx + 22} y={Y(ph) - 16} onMouseDown={(e) => { e.cancelBubble = true; deleteElement('post', p.id); }} onMouseEnter={setCur('pointer')} onMouseLeave={setCur('')}>
+              <Circle radius={10} fill="#ef4444" stroke="#fff" strokeWidth={2} />
+              <Line points={[-3.5, -3.5, 3.5, 3.5]} stroke="#fff" strokeWidth={2} lineCap="round" listening={false} />
+              <Line points={[-3.5, 3.5, 3.5, -3.5]} stroke="#fff" strokeWidth={2} lineCap="round" listening={false} />
+            </Group>
+          </>
+        )}
+      </React.Fragment>
     );
   };
 
@@ -284,6 +309,8 @@ export default function ElevationCanvas() {
           <span style={{ opacity: 0.7, marginLeft: 8 }}>{formatFeetInches(L)} × {formatFeetInches(Hgt)}{!isWall ? ` · ${(FENCE_TYPES[el.fenceType] || {}).label || ''}` : ''}</span>
         </div>
         <div style={{ flex: 1 }} />
+        {!isWall && <button onClick={() => { const id = addPost(el.id, 0.5); if (id) select({ type: 'post', id }); }} style={btn} title="Add a post at the center (then drag it)">+ Post</button>}
+        {!isWall && fencePosts.length > 1 && <button onClick={() => spacePostsEvenly(el.id)} style={btn} title="Space the placed posts evenly">Even posts</button>}
         <button onClick={() => stepElevation(-1)} style={btn} title="Previous">‹</button>
         <button onClick={() => stepElevation(1)} style={btn} title="Next">›</button>
       </div>

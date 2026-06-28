@@ -306,6 +306,13 @@ export const useStore = create((set, get) => ({
     });
     return id;
   },
+  // redistribute the placed posts on a fence to even interior spacing
+  spacePostsEvenly: (fenceId) => get().commit((s) => {
+    const fp = s.posts.filter((p) => p.fenceId === fenceId).sort((a, b) => (a.t ?? 0) - (b.t ?? 0));
+    if (!fp.length) return {};
+    const pos = new Map(fp.map((p, i) => [p.id, (i + 1) / (fp.length + 1)]));
+    return { posts: s.posts.map((p) => (pos.has(p.id) ? { ...p, t: pos.get(p.id) } : p)) };
+  }),
 
   // ---- labels (leader-line callouts) ----
   addLabel: (anchor) => {

@@ -278,16 +278,36 @@ export function FenceShape({ fence, scale, selected, onSelect, palette = DEFAULT
 }
 
 // ------------- POST (an individually placed fence post) -------------
-export function PostShape({ post, fence, scale, selected, onSelect, palette = DEFAULT_PALETTE, seg = null }) {
+export function PostShape({ post, fence, scale, selected, onSelect, onDelete, palette = DEFAULT_PALETTE, seg = null, zoom = 1 }) {
   if (!fence) return null;
   const a = seg?.a || fence.a, b = seg?.b || fence.b;
   const c = lerp(a, b, post.t);
   const ps = Math.max(5, 0.55 * scale); // a touch larger than the auto posts so a placed post reads as deliberate
+  const inv = 1 / (zoom || 1);
+  const setCur = (cur) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = cur; };
+  const moveArrows = [[0, -5, 0, 5], [-5, 0, 5, 0], [0, -5, -1.8, -2.9], [0, -5, 1.8, -2.9], [0, 5, -1.8, 2.9], [0, 5, 1.8, 2.9], [-5, 0, -2.9, -1.8], [-5, 0, -2.9, 1.8], [5, 0, 2.9, -1.8], [5, 0, 2.9, 1.8]];
   return (
-    <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)}>
-      <Rect x={c.x * scale - ps / 2} y={c.y * scale - ps / 2} width={ps} height={ps}
-        fill={post.color || palette.postFill} stroke={selected ? BLUE : '#0a2540'} strokeWidth={selected ? 2 : 0.75}
-        cornerRadius={1} hitStrokeWidth={16} />
+    <Group>
+      <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)}>
+        <Rect x={c.x * scale - ps / 2} y={c.y * scale - ps / 2} width={ps} height={ps}
+          fill={post.color || palette.postFill} stroke={selected ? BLUE : '#0a2540'} strokeWidth={selected ? 2 : 0.75}
+          cornerRadius={1} hitStrokeWidth={16} />
+      </Group>
+      {selected && (
+        <Group x={c.x * scale} y={c.y * scale} scaleX={inv} scaleY={inv}>
+          {/* move handle (drag to slide the post along its fence) */}
+          <Group x={-13} y={-15} onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)} onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
+            <Circle radius={8} fill={BLUE} stroke="#fff" strokeWidth={1.5} hitStrokeWidth={18} />
+            {moveArrows.map((p, i) => <Line key={i} points={p} stroke="#fff" strokeWidth={1.2} lineCap="round" listening={false} />)}
+          </Group>
+          {/* delete ✕ */}
+          <Group x={13} y={-15} onMouseDown={(e) => { e.cancelBubble = true; onDelete && onDelete(e); }} onTouchStart={(e) => { e.cancelBubble = true; onDelete && onDelete(e); }} onMouseEnter={setCur('pointer')} onMouseLeave={setCur('')}>
+            <Circle radius={8} fill="#ef4444" stroke="#fff" strokeWidth={1.5} hitStrokeWidth={18} />
+            <Line points={[-3, -3, 3, 3]} stroke="#fff" strokeWidth={1.6} lineCap="round" listening={false} />
+            <Line points={[-3, 3, 3, -3]} stroke="#fff" strokeWidth={1.6} lineCap="round" listening={false} />
+          </Group>
+        </Group>
+      )}
     </Group>
   );
 }
