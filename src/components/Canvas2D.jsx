@@ -1166,11 +1166,19 @@ export default function Canvas2D() {
           )}
 
           {/* draft preview */}
-          {showDraftPreview && (
+          {showDraftPreview && (() => {
+            const isWall = tool === 'wall';
+            const col = isWall ? BLUE : TEAL;
+            const band = (isWall ? (store.wallThickness || 0.5) : FENCE_THICK) * scale; // body width on the plan
+            const pts = [draft.x * scale, draft.y * scale, cursor.x * scale, cursor.y * scale];
+            return (
             <Group listening={false}>
-              <Line points={[draft.x * scale, draft.y * scale, cursor.x * scale, cursor.y * scale]}
-                stroke={tool === 'wall' ? BLUE : TEAL} strokeWidth={2} dash={[6, 5]} />
-              <DimLabel a={draft} b={{ x: cursor.x, y: cursor.y }} scale={scale} palette={t} color={tool === 'wall' ? BLUE : t.fenceDim} zoom={view.k} />
+              {/* thick translucent band — previews the real wall/fence body so the
+                  drag reads as a wall, not just a guide line */}
+              <Line points={pts} stroke={col} strokeWidth={band} opacity={0.3} lineCap="butt" />
+              {/* crisp dashed centerline on top */}
+              <Line points={pts} stroke={col} strokeWidth={1.5} dash={[6, 5]} />
+              <DimLabel a={draft} b={{ x: cursor.x, y: cursor.y }} scale={scale} palette={t} color={isWall ? BLUE : t.fenceDim} zoom={view.k} />
               {/* "close the loop" target — click the start point to finish */}
               {runStart && dist(runStart, draft) > 0.1 && (
                 <Circle x={runStart.x * scale} y={runStart.y * scale} radius={9 / view.k}
@@ -1178,7 +1186,8 @@ export default function Canvas2D() {
                   fill={dist(cursor, runStart) < 0.8 ? 'rgba(20,184,166,0.25)' : 'transparent'} />
               )}
             </Group>
-          )}
+            );
+          })()}
 
           {/* touch anchor reticle — after the first tap, a target marker sits on the
               start point so it's obvious where the run is anchored (paired with the
@@ -1335,7 +1344,7 @@ export default function Canvas2D() {
             const step = (d) => store.setDefault('wallThickness', Math.max(1, Math.min(24, inch + d)) / 12);
             return (
               <div className="dt-thick">
-                <span className="dt-label">Thickness</span>
+                <span className="dt-label">Wall thickness</span>
                 <button onClick={() => step(-0.5)} aria-label="Thinner">−</button>
                 <span className="dt-val">{Number.isInteger(inch) ? inch : inch.toFixed(1)}″</span>
                 <button onClick={() => step(0.5)} aria-label="Thicker">+</button>

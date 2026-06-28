@@ -630,10 +630,11 @@ button:focus-visible,
 @media (max-width: 700px) {
   .draw-toolbar {
     left: 10px; right: 10px; transform: none; top: 58px;
-    justify-content: center; gap: 12px; padding: 7px 12px;
+    justify-content: center; flex-wrap: wrap; gap: 8px 10px; padding: 7px 12px;
     max-width: none; font-size: 12.5px;
   }
-  .draw-toolbar .dt-hint, .draw-toolbar .dt-label { display: none; }
+  /* keep the "Wall thickness" label so the inches read as wall width, not zoom */
+  .draw-toolbar .dt-hint { display: none; }
 }
 
 .scale-readout {
