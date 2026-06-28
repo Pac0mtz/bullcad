@@ -323,6 +323,64 @@ export function justifiedSegments(segs, justify, centroid, thicknessOf) {
   return out;
 }
 
+// Each wall's body as a FILLED POLYGON with mitered faces at every junction
+// (2-way, 3+-way, any angle) — the way CAD / floor-plan apps render walls so
+// joints are clean. Returns Map(id -> { points: [{x,y}, …] }). Faces are mitered
+// against the angularly-adjacent wall at each shared node; free ends are square.
+export function wallPolygons(segs, justify, centroid, thicknessOf) {
+  const jOf = (s) => s.justify || justify || 'center';
+  const isCentered = (s) => { const j = jOf(s); return !j || j === 'center'; };
+  const W = new Map(); // id -> { a, b, d (unit a->b), t }
+  for (const s of segs) {
+    const off = isCentered(s) ? { x: 0, y: 0 } : justifyOffsetVec(s.a, s.b, thicknessOf(s), jOf(s), centroid);
+    const a = { x: s.a.x + off.x, y: s.a.y + off.y };
+    const b = { x: s.b.x + off.x, y: s.b.y + off.y };
+    const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    W.set(s.id, { a, b, d: { x: (b.x - a.x) / L, y: (b.y - a.y) / L }, t: thicknessOf(s) });
+  }
+  // group wall-ends by shared node, each with its direction pointing INTO the wall
+  const key = (p) => `${Math.round(p.x * 1000)},${Math.round(p.y * 1000)}`;
+  const nodes = new Map();
+  for (const s of segs) {
+    for (const end of ['a', 'b']) {
+      const k = key(s[end]);
+      if (!nodes.has(k)) nodes.set(k, []);
+      const w = W.get(s.id);
+      const dAway = end === 'a' ? w.d : { x: -w.d.x, y: -w.d.y };
+      nodes.get(k).push({ id: s.id, end, dAway, ang: Math.atan2(dAway.y, dAway.x) });
+    }
+  }
+  // one face line for a member, on a side (+1 left / -1 right relative to dAway)
+  const faceLine = (m, side) => {
+    const w = W.get(m.id);
+    const P = m.end === 'a' ? w.a : w.b;
+    const nL = { x: -m.dAway.y, y: m.dAway.x };
+    return { o: { x: P.x + nL.x * side * w.t / 2, y: P.y + nL.y * side * w.t / 2 }, d: m.dAway };
+  };
+  const ends = new Map(); // `${id}:${end}` -> { left, right }
+  for (const members of nodes.values()) {
+    members.sort((p, q) => p.ang - q.ang);
+    const N = members.length;
+    for (let i = 0; i < N; i++) {
+      const m = members[i], ccw = members[(i + 1) % N], cw = members[(i - 1 + N) % N];
+      const lf = faceLine(m, 1), rf = faceLine(m, -1);
+      let left = lf.o, right = rf.o; // free end → square
+      if (N > 1) {
+        const a = faceLine(ccw, -1), b = faceLine(cw, 1);
+        left = lineIntersect(lf.o, lf.d, a.o, a.d) || lf.o;
+        right = lineIntersect(rf.o, rf.d, b.o, b.d) || rf.o;
+      }
+      ends.set(`${m.id}:${m.end}`, { left, right });
+    }
+  }
+  const out = new Map();
+  for (const s of segs) {
+    const ea = ends.get(`${s.id}:a`), eb = ends.get(`${s.id}:b`);
+    if (ea && eb) out.set(s.id, { points: [ea.left, eb.right, eb.left, ea.right] });
+  }
+  return out;
+}
+
 // Architectural dimension geometry for one wall, in FEET. `kind` is
 // 'centerline' | 'interior' | 'exterior'; `offset` is the gap (ft) between the
 // wall face and the dimension line; `centroid` decides which side is "outside";

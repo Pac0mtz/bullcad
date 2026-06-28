@@ -135,16 +135,23 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
 // ---------------- WALL ----------------
 // Architectural poché: the wall is a single solid band the width of its real
 // thickness (no centerline / no light border). Square caps fill shared corners.
-export function WallShape({ wall, scale, selected, onSelect, palette = DEFAULT_PALETTE, seg = null }) {
-  // `seg` carries the justified, miter-joined endpoints (feet). When absent the
-  // wall is centered and we draw its own a/b — corners share the node either way.
+export function WallShape({ wall, scale, selected, onSelect, palette = DEFAULT_PALETTE, seg = null, poly = null }) {
+  // `poly` is the wall body as a mitered, filled polygon (clean joints at any
+  // junction). Fall back to a thick stroked centerline when it isn't available.
+  const fill = selected ? palette.wallLineSel : palette.wallLine;
+  if (poly && poly.points && poly.points.length >= 3) {
+    const pts = poly.points.flatMap((p) => [p.x * scale, p.y * scale]);
+    return (
+      <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)}>
+        <Line points={pts} closed fill={fill} stroke={fill} strokeWidth={0.6} lineJoin="round" />
+      </Group>
+    );
+  }
   const a = seg?.a || wall.a, b = seg?.b || wall.b;
   const th = wallBandWidth(wall, scale);
-  const fill = selected ? palette.wallLineSel : palette.wallLine;
-  const pts = [a.x * scale, a.y * scale, b.x * scale, b.y * scale];
   return (
     <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)}>
-      <Line points={pts} stroke={fill} strokeWidth={th} lineCap="square"
+      <Line points={[a.x * scale, a.y * scale, b.x * scale, b.y * scale]} stroke={fill} strokeWidth={th} lineCap="square"
         hitStrokeWidth={Math.max(16, th)} />
     </Group>
   );

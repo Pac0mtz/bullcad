@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer, Line, Circle, Text, Group, Rect } from 'react-konva';
 import { useStore } from '../store.js';
 import {
-  dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, stairGeometry, snapAngle, detectRooms, parseLength,
+  dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, wallPolygons, stairGeometry, snapAngle, detectRooms, parseLength,
 } from '../utils/geometry.js';
 
 const FENCE_THICK = 0.3; // nominal fence body width (ft) for alignment offset
@@ -703,6 +703,9 @@ export default function Canvas2D() {
   const wallSegs = useMemo(
     () => justifiedSegments(walls, wallJustify, wallCentroid, (w) => w.thickness),
     [walls, wallJustify, wallCentroid]);
+  const wallPolys = useMemo(
+    () => wallPolygons(walls, wallJustify, wallCentroid, (w) => w.thickness || 0.5),
+    [walls, wallJustify, wallCentroid]);
   const fenceSegs = useMemo(
     () => justifiedSegments(fences, fenceJustify, fenceCentroid, () => FENCE_THICK),
     [fences, fenceJustify, fenceCentroid]);
@@ -789,7 +792,7 @@ export default function Canvas2D() {
 
           {/* walls */}
           {layers.walls && walls.map((w) => (
-            <WallShape key={w.id} wall={w} scale={scale} palette={t} seg={wallSegs.get(w.id)} selected={selection?.id === w.id || multiSet.has(w.id)}
+            <WallShape key={w.id} wall={w} scale={scale} palette={t} seg={wallSegs.get(w.id)} poly={wallPolys.get(w.id)} selected={selection?.id === w.id || multiSet.has(w.id)}
               onSelect={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'wall', id: w.id }); startHandle({ kind: 'wallMove', id: w.id })(e); } }} />
           ))}
           {/* openings */}
