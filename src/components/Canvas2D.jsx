@@ -8,7 +8,7 @@ import {
 const FENCE_THICK = 0.3; // nominal fence body width (ft) for alignment offset
 import { CANVAS_THEME } from '../utils/theme.js';
 import { WallShape, OpeningShape, FenceShape, GateShape, PostShape, DimLabel, WallDimension, WallOpeningDims, LabelShape, StairShape } from './canvas/Shapes.jsx';
-import { IconZoomIn, IconZoomOut, IconFit } from './Icons.jsx';
+import { IconZoomIn, IconZoomOut, IconFit, IconTrash } from './Icons.jsx';
 import Compass from './Compass.jsx';
 
 const NAVY = '#0a2540';
@@ -1265,8 +1265,9 @@ export default function Canvas2D() {
       <div className="scale-readout">grid = {stepLabel} &nbsp;·&nbsp; {Math.round(view.k * 100)}%<span className="sr-pan">&nbsp;·&nbsp; pan: Space-drag / middle-mouse</span></div>
 
       {/* compact length entry — anchored to the last placed point (stays put
-          while you aim, so the ✓ stays clickable/tappable) */}
-      {draft && (tool === 'wall' || tool === 'fence') && (() => {
+          while you aim). Walls don't show it (drawn by clicking/snapping); the
+          live length already reads on the segment + dimension strings. */}
+      {draft && tool === 'fence' && (() => {
         const p = draft;
         const px = view.x + p.x * scale * view.k;
         const py = Math.max(28, Math.min(size.h - 28, view.y + p.y * scale * view.k));
@@ -1315,7 +1316,7 @@ export default function Canvas2D() {
               <span className="wq-val">{Number.isInteger(inch) ? inch : inch.toFixed(1)}″</span>
               <button onMouseDown={stop(() => stepT(0.5))} aria-label="Thicker">+</button>
             </div>
-            <button className="wq-del" onMouseDown={stop(() => store.deleteSelected())} aria-label="Delete wall">✕</button>
+            <button className="wq-del" onMouseDown={stop(() => store.deleteSelected())} aria-label="Delete wall"><IconTrash style={{ width: 15, height: 15 }} /></button>
           </div>
         );
       })()}

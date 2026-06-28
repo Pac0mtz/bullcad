@@ -615,7 +615,8 @@ button:focus-visible,
 .wall-quick .wq-thick button:hover { background: rgba(255,255,255,0.24); }
 .wall-quick .wq-del {
   width: 26px; height: 26px; border: none; border-radius: 7px;
-  background: #ef4444; color: #fff; font-size: 13px; line-height: 1; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #ef4444; color: #fff; cursor: pointer;
 }
 .wall-quick .wq-del:hover { filter: brightness(1.08); }
 @media (pointer: coarse) {
