@@ -37,6 +37,7 @@ export default function Canvas2D() {
   const [guides, setGuides] = useState([]); // alignment guide lines (feet) while dragging
   const [marquee, setMarquee] = useState(null); // {x0,y0,x1,y1} feet — rubber-band box (zoom or select)
   const drag = useRef(null); // active handle drag
+  const runPath = useRef([]); // points clicked in the current wall run (for the room-area label)
   const marq = useRef(null);  // active marquee drag
   const suppressClick = useRef(false); // skip the click that ends a marquee drag
   const space = useRef(false);
@@ -122,7 +123,22 @@ export default function Canvas2D() {
   useEffect(() => { setDraft(null); setRunStart(null); setMeasure([]); setLenStr(''); }, [tool]);
 
   // finish the current wall/fence run; `toSelect` also drops back to the Select tool
-  const finishRun = (toSelect) => { setDraft(null); setRunStart(null); setLenStr(''); setGuides([]); if (toSelect) store.setTool('select'); };
+  const finishRun = (toSelect) => { setDraft(null); setRunStart(null); setLenStr(''); setGuides([]); runPath.current = []; if (toSelect) store.setTool('select'); };
+
+  // when a wall run closes into a loop, drop a draggable area label at the room centroid
+  const addRoomAreaLabel = (path) => {
+    if (!path || path.length < 3) return;
+    let area = 0, cx = 0, cy = 0;
+    for (let i = 0; i < path.length; i++) {
+      const a = path[i], b = path[(i + 1) % path.length];
+      const cr = a.x * b.y - b.x * a.y;
+      area += cr; cx += (a.x + b.x) * cr; cy += (a.y + b.y) * cr;
+    }
+    area /= 2;
+    if (Math.abs(area) < 1) return;
+    cx /= (6 * area); cy /= (6 * area);
+    store.addRoomLabel({ x: cx, y: cy }, `${Math.abs(area).toFixed(1)} ft²`);
+  };
 
   // focus the length-entry box as soon as a wall/fence run is started
   useEffect(() => {
@@ -289,10 +305,14 @@ export default function Canvas2D() {
     if (tool === 'wall' || tool === 'fence') {
       const pt = drawPt(raw);
       const clean = { x: pt.x, y: pt.y };
-      if (!draft) { setDraft(clean); setRunStart(clean); return; } // begin a run
+      if (!draft) { setDraft(clean); setRunStart(clean); runPath.current = [clean]; return; } // begin a run
       if (dist(draft, clean) < 0.1) { finishRun(false); return; }   // clicked the same point → finish (stay in tool)
       tool === 'wall' ? store.addWall(draft, clean) : store.addFence(draft, clean);
-      if (runStart && dist(clean, runStart) < 0.1) { finishRun(true); return; } // closed the loop → done, back to Select
+      if (runStart && dist(clean, runStart) < 0.1) { // closed the loop → tag the room area, back to Select
+        if (tool === 'wall') addRoomAreaLabel(runPath.current);
+        finishRun(true); return;
+      }
+      runPath.current.push(clean);
       setDraft(clean);
     } else if (tool === 'room') {
       const pt = snapDraw(raw);

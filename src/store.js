@@ -310,6 +310,18 @@ export const useStore = create((set, get) => ({
     return id;
   },
 
+  // a centered, leader-less label (used for auto room-area tags on loop close)
+  addRoomLabel: (pt, text) => {
+    const id = uid('label');
+    get().commit((s) => ({
+      labels: [...s.labels, {
+        id, anchor: { x: pt.x, y: pt.y }, pos: { x: pt.x, y: pt.y },
+        text, fontSize: 12, room: true, ...s.labelColors,
+      }],
+    }));
+    return id;
+  },
+
   // ---- stairs ----
   addStair: (pt) => {
     const id = uid('stair');
