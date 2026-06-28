@@ -1290,9 +1290,18 @@ export default function Canvas2D() {
       {/* selected-wall quick actions — a compact box riding the wall midpoint:
           nudge thickness or delete without opening the Properties panel */}
       {selWall && tool === 'select' && (() => {
-        const mid = lerp(selWall.a, selWall.b, 0.5);
-        const px = view.x + mid.x * scale * view.k;
-        const py = view.y + mid.y * scale * view.k;
+        const a = selWall.a, b = selWall.b;
+        const mid = lerp(a, b, 0.5);
+        const L = dist(a, b) || 1;
+        // perpendicular unit, biased to the lower side so the pill clears the wall
+        // line instead of sitting on top of it (below for horizontal walls, off to
+        // the side for vertical ones)
+        let nx = -(b.y - a.y) / L, ny = (b.x - a.x) / L;
+        if (ny < 0) { nx = -nx; ny = -ny; }
+        const band = (selWall.thickness || 0.5) * scale * view.k;
+        const off = band * 0.5 + (coarse ? 44 : 34);
+        const px = view.x + mid.x * scale * view.k + nx * off;
+        const py = view.y + mid.y * scale * view.k + ny * off;
         const cx = Math.max(74, Math.min(size.w - 74, px));
         const cy = Math.max(26, Math.min(size.h - 26, py));
         const inch = +(selWall.thickness * 12).toFixed(1);
