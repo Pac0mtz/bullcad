@@ -623,7 +623,11 @@ function insetPolygon(poly, walls) {
     lines.push({ o: { x: p.x + nx * half, y: p.y + ny * half }, d: { x: (q.x - p.x) / L, y: (q.y - p.y) / L } });
   }
   const inner = [];
-  for (let i = 0; i < n; i++) { const a = lines[(i - 1 + n) % n], b = lines[i]; inner.push(lineIntersect(a.o, a.d, b.o, b.d) || poly[i]); }
+  // vertex i = intersection of the offset lines of edges (i-1) and i. When those
+  // edges are collinear (e.g. a T-junction split a straight wall) the lines are
+  // parallel — fall back to b.o, which is poly[i] already offset inward, NOT the
+  // raw centerline point (that would leave a bump and over-count the area).
+  for (let i = 0; i < n; i++) { const a = lines[(i - 1 + n) % n], b = lines[i]; inner.push(lineIntersect(a.o, a.d, b.o, b.d) || b.o); }
   return { polygon: inner, area: area(inner) };
 }
 
