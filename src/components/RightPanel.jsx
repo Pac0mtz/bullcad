@@ -56,6 +56,7 @@ function ElevationButton({ type, id }) {
 
 function SelectedProps() {
   const sel = useStore((s) => s.selection);
+  const multi = useStore((s) => s.multi);
   const walls = useStore((s) => s.walls);
   const openings = useStore((s) => s.openings);
   const fences = useStore((s) => s.fences);
@@ -74,7 +75,18 @@ function SelectedProps() {
   const applyWallStyleToAll = useStore((s) => s.applyWallStyleToAll);
 
   if (!sel) {
-    return <p className="empty-note">Nothing selected. Use the <b>Select</b> tool and click any wall, fence, door, window, gate, or label to edit it.</p>;
+    if (multi.length > 1) {
+      const counts = {};
+      multi.forEach((m) => { counts[m.type] = (counts[m.type] || 0) + 1; });
+      const summary = Object.entries(counts).map(([k, n]) => `${n} ${k}${n > 1 ? 's' : ''}`).join(', ');
+      return (
+        <div>
+          <p className="empty-note"><b>{multi.length} items selected</b> ({summary}). Drag the box on the canvas to move them, or delete the group.</p>
+          <button className="btn danger del-btn" onClick={del}><IconTrash style={{ width: 16, height: 16 }} /> Delete {multi.length}</button>
+        </div>
+      );
+    }
+    return <p className="empty-note">Nothing selected. Use the <b>Select</b> tool and click any wall, fence, door, window, gate, or label to edit it. Drag a box to select several.</p>;
   }
 
   const list = { wall: walls, opening: openings, fence: fences, gate: gates, post: posts, label: labels, stair: stairs }[sel.type];

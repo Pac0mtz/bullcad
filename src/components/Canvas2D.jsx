@@ -22,7 +22,7 @@ export default function Canvas2D() {
   const layerRef = useRef(null);
 
   const store = useStore();
-  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, posts, labels, stairs, selection, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, layers, detachCorner } = store;
+  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, posts, labels, stairs, selection, multi, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, layers, detachCorner } = store;
   const rooms = useMemo(() => (showRoomAreas ? detectRooms(walls) : []), [showRoomAreas, walls]);
   const t = CANVAS_THEME[theme] || CANVAS_THEME.light;
 
@@ -35,12 +35,18 @@ export default function Canvas2D() {
   const lenInputRef = useRef(null);
   const [measure, setMeasure] = useState([]); // feet pts
   const [guides, setGuides] = useState([]); // alignment guide lines (feet) while dragging
+  const [marquee, setMarquee] = useState(null); // {x0,y0,x1,y1} feet — rubber-band box (zoom or select)
   const drag = useRef(null); // active handle drag
+  const marq = useRef(null);  // active marquee drag
+  const suppressClick = useRef(false); // skip the click that ends a marquee drag
   const space = useRef(false);
   const shift = useRef(false);
   const alt = useRef(false);
   const pan = useRef(null);
   const coarse = useMemo(() => typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches, []);
+  // mirror view/size into refs so the window mouseup listener (bound once) can read them
+  const viewRef = useRef(view); viewRef.current = view;
+  const sizeRef = useRef(size); sizeRef.current = size;
 
   // Adaptive grid: subdivide the 1-ft grid into 6"/3"/1" cells as you zoom in, so
   // the grid (and snapping) work at inch precision. `minorStep` is in feet.
@@ -194,8 +200,10 @@ export default function Canvas2D() {
       return;
     }
     if (drag.current) return; // handle drag already started on a handle
-    if (e.target === stageRef.current && tool === 'select') {
-      store.clearSelection();
+    // start a rubber-band marquee on empty canvas: Zoom → zoom-to-area, Select → multi-select
+    if (e.target === stageRef.current && (tool === 'zoom' || tool === 'select') && evt.button === 0) {
+      const raw = getFeet();
+      if (raw) { marq.current = { mode: tool, x0: raw.x, y0: raw.y, x1: raw.x, y1: raw.y, moved: false, add: evt.shiftKey }; setMarquee({ x0: raw.x, y0: raw.y, x1: raw.x, y1: raw.y }); }
     }
   };
 
@@ -203,6 +211,12 @@ export default function Canvas2D() {
     if (pan.current) return;
     const raw = getFeet();
     if (!raw) return;
+    if (marq.current) {
+      const m = marq.current; m.x1 = raw.x; m.y1 = raw.y;
+      if (!m.moved && Math.hypot(raw.x - m.x0, raw.y - m.y0) > 0.2) m.moved = true;
+      setMarquee({ x0: m.x0, y0: m.y0, x1: raw.x, y1: raw.y });
+      return;
+    }
     if (drag.current) {
       handleDragMove(raw);
       return;
@@ -210,6 +224,28 @@ export default function Canvas2D() {
     if (tool === 'wall' || tool === 'fence') setCursor(drawPt(raw));
     else if (tool === 'room') setCursor(snapDraw(raw));
     else setCursor(raw);
+  };
+
+  // finalize a marquee on release — kept in a ref so the once-bound mouseup
+  // listener always calls the latest closure (current geometry / view / size)
+  const finishMarqueeRef = useRef();
+  finishMarqueeRef.current = (m) => {
+    const r = { x0: Math.min(m.x0, m.x1), y0: Math.min(m.y0, m.y1), x1: Math.max(m.x0, m.x1), y1: Math.max(m.y0, m.y1) };
+    if (m.mode === 'zoom') {
+      const wft = Math.max(0.3, r.x1 - r.x0), hft = Math.max(0.3, r.y1 - r.y0), sz = sizeRef.current;
+      const k = Math.max(0.2, Math.min(16, Math.min(sz.w / (wft * scale), sz.h / (hft * scale)) * 0.92));
+      const cx = (r.x0 + r.x1) / 2 * scale, cy = (r.y0 + r.y1) / 2 * scale;
+      setView({ k, x: sz.w / 2 - cx * k, y: sz.h / 2 - cy * k });
+    } else {
+      const inside = (p) => p && p.x >= r.x0 && p.x <= r.x1 && p.y >= r.y0 && p.y <= r.y1;
+      const items = [];
+      if (layers.walls) walls.forEach((w) => { if (inside(w.a) && inside(w.b)) items.push({ type: 'wall', id: w.id }); });
+      if (layers.fences) fences.forEach((f) => { if (inside(f.a) && inside(f.b)) items.push({ type: 'fence', id: f.id }); });
+      if (layers.stairs) stairs.forEach((s) => { if (inside({ x: s.x, y: s.y })) items.push({ type: 'stair', id: s.id }); });
+      if (layers.labels) labels.forEach((l) => { if (inside(l.pos)) items.push({ type: 'label', id: l.id }); });
+      const merged = m.add ? [...store.multi.filter((a) => !items.some((b) => b.id === a.id)), ...items] : items;
+      store.selectMany(merged);
+    }
   };
 
   // native pan via window listeners (so it keeps working off-stage)
@@ -220,6 +256,12 @@ export default function Canvas2D() {
     };
     const up = () => {
       if (pan.current) pan.current = null;
+      if (marq.current) {
+        const m = marq.current; marq.current = null;
+        if (m.moved) finishMarqueeRef.current(m);
+        else if (m.mode === 'select') useStore.getState().clearSelection();
+        setMarquee(null);
+      }
       if (drag.current) {
         // only record an undo step if the handle actually moved
         if (drag.current.moved && drag.current.before) useStore.getState().pushPast(drag.current.before);
@@ -238,6 +280,7 @@ export default function Canvas2D() {
   }, []);
 
   const onClick = (e) => {
+    if (marq.current && marq.current.moved) return; // a marquee drag, not a click (Konva fires click before mouseup)
     // allow touch taps (button is undefined); block only real non-left mouse buttons
     if (space.current || (e.evt.button != null && e.evt.button !== 0)) return;
     const raw = getFeet();
@@ -353,6 +396,14 @@ export default function Canvas2D() {
     drag.current = { ...payload, moved: false, before: useStore.getState().snapshotGeom() };
   };
 
+  // drag the group bounding box to move every selected element together
+  const startGroupDrag = (e) => {
+    e.cancelBubble = true;
+    if (tool !== 'select' || multi.length < 2) return;
+    const raw = getFeet(); if (!raw) return;
+    drag.current = { kind: 'group', items: multi, last: snapEnabled ? snapPt(raw, minorStep) : raw, moved: false, before: useStore.getState().snapshotGeom() };
+  };
+
   // Snap an opening/gate to align with other openings/gates (and the host's
   // ends/middle); returns the snapped `t` and alignment guide lines to draw.
   const snapAlignT = (raw, host, kind, id) => {
@@ -386,6 +437,12 @@ export default function Canvas2D() {
   const handleDragMove = (raw) => {
     const d = drag.current;
     d.moved = true;
+    if (d.kind === 'group') {
+      const sp = snapEnabled ? snapPt(raw, minorStep) : raw;
+      const dx = sp.x - d.last.x, dy = sp.y - d.last.y;
+      if (dx || dy) { store.translateSelection(d.items, dx, dy); d.last = sp; }
+      return;
+    }
     if (d.kind === 'wallEnd' || d.kind === 'fenceEnd') {
       const type = d.kind === 'wallEnd' ? 'wall' : 'fence';
       const list = type === 'wall' ? walls : fences;
@@ -557,6 +614,21 @@ export default function Canvas2D() {
   const selOpening = selection?.type === 'opening' ? openings.find((o) => o.id === selection.id) : null;
   const selGate = selection?.type === 'gate' ? gates.find((g) => g.id === selection.id) : null;
 
+  // marquee group: set of selected ids + the group bounding box (feet)
+  const multiSet = useMemo(() => new Set(multi.map((m) => m.id)), [multi]);
+  const groupBounds = useMemo(() => {
+    if (multi.length < 2) return null;
+    let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+    const add = (p) => { if (p) { minx = Math.min(minx, p.x); miny = Math.min(miny, p.y); maxx = Math.max(maxx, p.x); maxy = Math.max(maxy, p.y); } };
+    multi.forEach((it) => {
+      if (it.type === 'wall') { const w = walls.find((x) => x.id === it.id); if (w) { add(w.a); add(w.b); } }
+      else if (it.type === 'fence') { const f = fences.find((x) => x.id === it.id); if (f) { add(f.a); add(f.b); } }
+      else if (it.type === 'stair') { const s = stairs.find((x) => x.id === it.id); if (s) add({ x: s.x, y: s.y }); }
+      else if (it.type === 'label') { const l = labels.find((x) => x.id === it.id); if (l) add(l.pos); }
+    });
+    return isFinite(minx) ? { minx, miny, maxx, maxy } : null;
+  }, [multi, walls, fences, stairs, labels]);
+
   // every wall + fence corner, deduped — drawn as a small gray grip that's always
   // visible (turns blue when its element is selected, via the handles below)
   const cornerDots = useMemo(() => {
@@ -621,7 +693,7 @@ export default function Canvas2D() {
 
           {/* fences (under walls) */}
           {layers.fences && fences.map((f) => (
-            <FenceShape key={f.id} fence={f} scale={scale} palette={t} seg={fenceSegs.get(f.id)} gates={gatesByFence[f.id] || []} selected={selection?.id === f.id}
+            <FenceShape key={f.id} fence={f} scale={scale} palette={t} seg={fenceSegs.get(f.id)} gates={gatesByFence[f.id] || []} selected={selection?.id === f.id || multiSet.has(f.id)}
               onSelect={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'fence', id: f.id }); startHandle({ kind: 'fenceMove', id: f.id })(e); } }} />
           ))}
           {/* gates */}
@@ -649,7 +721,7 @@ export default function Canvas2D() {
 
           {/* walls */}
           {layers.walls && walls.map((w) => (
-            <WallShape key={w.id} wall={w} scale={scale} palette={t} seg={wallSegs.get(w.id)} selected={selection?.id === w.id}
+            <WallShape key={w.id} wall={w} scale={scale} palette={t} seg={wallSegs.get(w.id)} selected={selection?.id === w.id || multiSet.has(w.id)}
               onSelect={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'wall', id: w.id }); startHandle({ kind: 'wallMove', id: w.id })(e); } }} />
           ))}
           {/* openings */}
@@ -802,6 +874,30 @@ export default function Canvas2D() {
             );
           })())}
 
+          {/* group bounding box — drag it to move every selected element together */}
+          {groupBounds && (() => {
+            const pad = 6 / view.k;
+            const x = groupBounds.minx * scale - pad, y = groupBounds.miny * scale - pad;
+            const w = (groupBounds.maxx - groupBounds.minx) * scale + pad * 2, h = (groupBounds.maxy - groupBounds.miny) * scale + pad * 2;
+            const setCur = (c) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = c; };
+            return (
+              <Group>
+                <Rect x={x} y={y} width={w} height={h} stroke={BLUE} strokeWidth={1.5 / view.k} dash={[8 / view.k, 5 / view.k]} fill="rgba(37,99,235,0.06)"
+                  onMouseDown={startGroupDrag} onTouchStart={startGroupDrag} onMouseEnter={setCur('move')} onMouseLeave={setCur('')} />
+              </Group>
+            );
+          })()}
+
+          {/* rubber-band marquee (zoom = amber, select = blue) */}
+          {marquee && (() => {
+            const x = Math.min(marquee.x0, marquee.x1) * scale, y = Math.min(marquee.y0, marquee.y1) * scale;
+            const w = Math.abs(marquee.x1 - marquee.x0) * scale, h = Math.abs(marquee.y1 - marquee.y0) * scale;
+            const zoom = marq.current?.mode === 'zoom' || tool === 'zoom';
+            const col = zoom ? '#f59e0b' : BLUE;
+            return <Rect x={x} y={y} width={w} height={h} stroke={col} strokeWidth={1.5 / view.k} dash={[6 / view.k, 4 / view.k]}
+              fill={zoom ? 'rgba(245,158,11,0.08)' : 'rgba(37,99,235,0.08)'} listening={false} />;
+          })()}
+
           {/* room area labels */}
           {rooms.map((rm, i) => {
             const txt = `${Math.round(rm.area)} sq ft`;
@@ -816,7 +912,7 @@ export default function Canvas2D() {
 
           {/* stairs */}
           {layers.stairs && stairs.map((stp) => (
-            <StairShape key={stp.id} stair={stp} scale={scale} palette={t} zoom={view.k} selected={selection?.id === stp.id}
+            <StairShape key={stp.id} stair={stp} scale={scale} palette={t} zoom={view.k} selected={selection?.id === stp.id || multiSet.has(stp.id)}
               onSelect={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'stair', id: stp.id }); startHandle({ kind: 'stair', id: stp.id })(e); } }}
               onWidthDown={(e) => { e.cancelBubble = true; store.select({ type: 'stair', id: stp.id }); startHandle({ kind: 'stairWidth', id: stp.id })(e); }}
               onRunDown={(e) => { e.cancelBubble = true; store.select({ type: 'stair', id: stp.id }); startHandle({ kind: 'stairRun', id: stp.id })(e); }}
@@ -825,7 +921,7 @@ export default function Canvas2D() {
 
           {/* labels (leader-line callouts) */}
           {layers.labels && labels.map((lb) => (
-            <LabelShape key={lb.id} label={lb} scale={scale} zoom={view.k} selected={selection?.id === lb.id}
+            <LabelShape key={lb.id} label={lb} scale={scale} zoom={view.k} selected={selection?.id === lb.id || multiSet.has(lb.id)}
               onPillDown={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'label', id: lb.id }); startHandle({ kind: 'labelPos', id: lb.id })(e); } }}
               onAnchorDown={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'label', id: lb.id }); startHandle({ kind: 'labelAnchor', id: lb.id })(e); } }} />
           ))}

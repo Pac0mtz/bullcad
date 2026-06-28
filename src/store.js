@@ -129,6 +129,7 @@ export const useStore = create((set, get) => ({
 
   // ----- selection + history -----
   selection: null, // { type:'wall'|'opening'|'fence'|'gate', id }
+  multi: [], // marquee group selection — [{ type, id }]
   elevationTarget: null, // { type:'wall'|'fence', id } — open elevation editor
   past: [],
   future: [],
@@ -152,11 +153,13 @@ export const useStore = create((set, get) => ({
   setMode: (mode) => set({ mode }),
   setTheme: (theme) => set({ theme }),
   toggleTheme: () => set((s) => ({ theme: s.theme === 'light' ? 'dark' : 'light' })),
-  setTool: (tool) => set({ tool, selection: tool === 'select' ? get().selection : null }),
+  setTool: (tool) => set({ tool, selection: tool === 'select' ? get().selection : null, multi: tool === 'select' ? get().multi : [] }),
   setScale: (scale) => set({ scale: Math.max(4, Math.min(40, scale)) }),
   setSnap: (snapEnabled) => set({ snapEnabled }),
-  select: (selection) => set({ selection }),
-  clearSelection: () => set({ selection: null }),
+  select: (selection) => set({ selection, multi: selection ? [{ type: selection.type, id: selection.id }] : [] }),
+  // marquee multi-select: `multi` is the group; `selection` is the one shown in Properties
+  selectMany: (items) => set({ multi: items, selection: items.length === 1 ? { type: items[0].type, id: items[0].id } : null }),
+  clearSelection: () => set({ selection: null, multi: [] }),
   setDefault: (k, v) => set({ [k]: v }),
 
   // push current geometry to undo stack, then mutate.
@@ -343,28 +346,52 @@ export const useStore = create((set, get) => ({
       return out;
     }),
 
+  // delete the whole marquee group (or the single selection)
   deleteSelected: () => {
-    const sel = get().selection;
-    if (!sel) return;
-    get().deleteElement(sel.type, sel.id);
-    set({ selection: null });
+    const { multi, selection } = get();
+    const items = multi.length ? multi : (selection ? [selection] : []);
+    if (!items.length) return;
+    const ids = {}; items.forEach((it) => (ids[it.type] ||= new Set()).add(it.id));
+    get().commit((s) => {
+      const out = {};
+      for (const type in ids) out[type + 's'] = s[type + 's'].filter((e) => !ids[type].has(e.id));
+      if (ids.wall) out.openings = s.openings.filter((o) => !ids.wall.has(o.wallId));
+      if (ids.fence) { out.gates = s.gates.filter((g) => !ids.fence.has(g.fenceId)); out.posts = s.posts.filter((p) => !ids.fence.has(p.fenceId)); }
+      return out;
+    });
+    set({ selection: null, multi: [] });
   },
 
-  // arrow-key nudge of the current selection by one grid unit (dx,dy in cells)
+  // translate a group by (dx,dy) feet during a drag (no per-tick history; commit
+  // on release via the drag system). walls/fences move both ends; stairs/labels
+  // move their anchor; openings/gates/posts ride their host wall/fence.
+  translateSelection: (items, dx, dy) => set((s) => {
+    const ids = {}; items.forEach((it) => (ids[it.type] ||= new Set()).add(it.id));
+    const seg = (e) => ({ ...e, a: { x: e.a.x + dx, y: e.a.y + dy }, b: { x: e.b.x + dx, y: e.b.y + dy } });
+    const out = {};
+    if (ids.wall) out.walls = s.walls.map((w) => ids.wall.has(w.id) ? seg(w) : w);
+    if (ids.fence) out.fences = s.fences.map((f) => ids.fence.has(f.id) ? seg(f) : f);
+    if (ids.stair) out.stairs = s.stairs.map((st) => ids.stair.has(st.id) ? { ...st, x: st.x + dx, y: st.y + dy } : st);
+    if (ids.label) out.labels = s.labels.map((l) => ids.label.has(l.id) ? { ...l, pos: { x: l.pos.x + dx, y: l.pos.y + dy }, anchor: { x: l.anchor.x + dx, y: l.anchor.y + dy } } : l);
+    return out;
+  }),
+
+  // arrow-key nudge of the whole selection by one grid unit (dx,dy in cells)
   nudgeSelected: (dx, dy) => {
-    const sel = get().selection;
-    if (!sel) return;
+    const { multi, selection } = get();
+    const items = multi.length ? multi : (selection ? [selection] : []);
+    if (!items.length) return;
     const step = get().grid || 1, mx = dx * step, my = dy * step;
-    get().commit((st) => {
-      const key = sel.type + 's';
-      return { [key]: st[key].map((e) => {
-        if (e.id !== sel.id) return e;
-        if (sel.type === 'wall' || sel.type === 'fence') return { ...e, a: { x: e.a.x + mx, y: e.a.y + my }, b: { x: e.b.x + mx, y: e.b.y + my } };
-        if (sel.type === 'stair') return { ...e, x: e.x + mx, y: e.y + my };
-        if (sel.type === 'label') return { ...e, pos: { x: e.pos.x + mx, y: e.pos.y + my }, anchor: { x: e.anchor.x + mx, y: e.anchor.y + my } };
-        if (sel.type === 'opening' || sel.type === 'gate' || sel.type === 'post') return { ...e, t: Math.max(0, Math.min(1, e.t + dx * 0.04)) }; // slide along host
-        return e;
-      }) };
+    const ids = {}; items.forEach((it) => (ids[it.type] ||= new Set()).add(it.id));
+    get().commit((s) => {
+      const seg = (e) => ({ ...e, a: { x: e.a.x + mx, y: e.a.y + my }, b: { x: e.b.x + mx, y: e.b.y + my } });
+      const out = {};
+      if (ids.wall) out.walls = s.walls.map((w) => ids.wall.has(w.id) ? seg(w) : w);
+      if (ids.fence) out.fences = s.fences.map((f) => ids.fence.has(f.id) ? seg(f) : f);
+      if (ids.stair) out.stairs = s.stairs.map((st) => ids.stair.has(st.id) ? { ...st, x: st.x + mx, y: st.y + my } : st);
+      if (ids.label) out.labels = s.labels.map((l) => ids.label.has(l.id) ? { ...l, pos: { x: l.pos.x + mx, y: l.pos.y + my }, anchor: { x: l.anchor.x + mx, y: l.anchor.y + my } } : l);
+      for (const type of ['opening', 'gate', 'post']) if (ids[type]) out[type + 's'] = s[type + 's'].map((e) => ids[type].has(e.id) ? { ...e, t: Math.max(0, Math.min(1, e.t + dx * 0.04)) } : e);
+      return out;
     });
   },
 
