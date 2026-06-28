@@ -57,10 +57,8 @@ export function DimLabel({ a, b, scale, color = NAVY, off = 0.9, palette = DEFAU
   if (angle > 90 || angle < -90) angle += 180; // keep text upright
   return (
     <Group x={cx} y={cy} rotation={angle} scaleX={inv} scaleY={inv} listening={false}>
-      <Rect x={-w / 2} y={-6.5} width={w} height={13} fill={palette.dimBg} cornerRadius={3}
-        shadowColor={palette.dimShadow} shadowBlur={2} shadowOpacity={0.15} />
       <Text x={-w / 2} y={-4.5} width={w} align="center" text={txt} fontSize={9.5}
-        fontStyle="600" fill={color} />
+        fontStyle="600" fill={color} stroke={palette.opMask} strokeWidth={3} fillAfterStrokeEnabled lineJoin="round" />
     </Group>
   );
 }
@@ -87,10 +85,9 @@ export function WallDimension({ wall, kind, offset, centroid, justify = 'center'
       <Group x={g.label.x * S} y={g.label.y * S} rotation={g.label.angle} scaleX={inv} scaleY={inv}
         onMouseDown={onPillDown} onTouchStart={onPillDown}
         onMouseEnter={onPillDown && setCur('move')} onMouseLeave={onPillDown && setCur('')}>
-        <Rect x={-w / 2} y={-6.5} width={w} height={13} fill={palette.dimBg} cornerRadius={3}
-          stroke={onPillDown ? palette.opStroke : undefined} strokeWidth={onPillDown ? 0.5 : 0}
-          shadowColor={palette.dimShadow} shadowBlur={2} shadowOpacity={0.15} />
-        <Text x={-w / 2} y={-4.5} width={w} align="center" text={g.label.text} fontSize={9.5} fontStyle="600" fill={color} listening={false} />
+        {/* invisible hit area keeps the dim draggable; the pill itself is gone */}
+        <Rect x={-w / 2} y={-6.5} width={w} height={13} fill="rgba(0,0,0,0.001)" />
+        <Text x={-w / 2} y={-4.5} width={w} align="center" text={g.label.text} fontSize={9.5} fontStyle="600" fill={color} stroke={palette.opMask} strokeWidth={3} fillAfterStrokeEnabled lineJoin="round" listening={false} />
       </Group>
     </Group>
   );
@@ -121,10 +118,8 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
           <Group key={'g' + i} x={seg.label.x * S} y={seg.label.y * S} rotation={seg.label.angle} scaleX={inv} scaleY={inv}
             onMouseDown={onPillDown} onTouchStart={onPillDown}
             onMouseEnter={onPillDown && setCur('move')} onMouseLeave={onPillDown && setCur('')}>
-            <Rect x={-w / 2} y={-6} width={w} height={12} fill={palette.dimBg} cornerRadius={3}
-              stroke={onPillDown ? palette.opStroke : undefined} strokeWidth={onPillDown ? 0.5 : 0}
-              shadowColor={palette.dimShadow} shadowBlur={2} shadowOpacity={0.12} />
-            <Text x={-w / 2} y={-4.5} width={w} align="center" text={seg.label.text} fontSize={8.5} fontStyle="600" fill={color} listening={false} />
+            <Rect x={-w / 2} y={-6} width={w} height={12} fill="rgba(0,0,0,0.001)" />
+            <Text x={-w / 2} y={-4.5} width={w} align="center" text={seg.label.text} fontSize={8.5} fontStyle="600" fill={color} stroke={palette.opMask} strokeWidth={3} fillAfterStrokeEnabled lineJoin="round" listening={false} />
           </Group>
         );
       })}

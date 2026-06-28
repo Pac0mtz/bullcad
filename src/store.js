@@ -2,9 +2,9 @@ import { create } from 'zustand';
 import { uid, FENCE_TYPES, OPENING_DEFAULTS, WINDOW_STYLES } from './utils/geometry.js';
 
 // ----- snapshot helpers for undo/redo -----
-const GEOM_KEYS = ['walls', 'openings', 'fences', 'gates', 'posts', 'labels', 'stairs', 'roomNames'];
-// roomNames is a {signature: name} map; everything else is an array
-const emptyVal = (k) => (k === 'roomNames' ? {} : []);
+const GEOM_KEYS = ['walls', 'openings', 'fences', 'gates', 'posts', 'labels', 'stairs', 'roomNames', 'roomLabelPos'];
+// roomNames {sig: name} and roomLabelPos {sig: {x,y}} are maps; rest are arrays
+const emptyVal = (k) => (k === 'roomNames' || k === 'roomLabelPos' ? {} : []);
 const snapshot = (s) => JSON.parse(JSON.stringify(Object.fromEntries(GEOM_KEYS.map((k) => [k, s[k] ?? emptyVal(k)]))));
 // live geometry of a state, and an empty page's geometry
 const geomOf = (s) => Object.fromEntries(GEOM_KEYS.map((k) => [k, s[k] ?? emptyVal(k)]));
@@ -49,7 +49,7 @@ function samplePlan() {
     { id: uid('gate'), fenceId: fences[0].id, t: 0.5, width: 4 },
   ];
 
-  return { walls, openings, fences, gates, posts: [], labels: [], stairs: [], roomNames: {} };
+  return { walls, openings, fences, gates, posts: [], labels: [], stairs: [], roomNames: {}, roomLabelPos: {} };
 }
 
 // ----- autosave: persist the whole project to localStorage so a refresh (or a
@@ -163,6 +163,9 @@ export const useStore = create((set, get) => ({
   // (held in `multi` so they highlight and move/delete together as one unit)
   selectRoom: (sig, wallIds) => set({ selection: { type: 'room', id: sig }, multi: wallIds.map((id) => ({ type: 'wall', id })) }),
   setRoomName: (sig, name) => get().commit((s) => ({ roomNames: { ...s.roomNames, [sig]: name } })),
+  // live-move a room's label (no history per tick; the drag commits on release).
+  // pt=null clears the override so the label snaps back to the room centroid.
+  setRoomLabelPos: (sig, pt) => set((s) => { const m = { ...s.roomLabelPos }; if (pt) m[sig] = { x: pt.x, y: pt.y }; else delete m[sig]; return { roomLabelPos: m }; }),
   // marquee multi-select: `multi` is the group; `selection` is the one shown in Properties
   selectMany: (items) => set({ multi: items, selection: items.length === 1 ? { type: items[0].type, id: items[0].id } : null }),
   clearSelection: () => set({ selection: null, multi: [] }),
@@ -418,7 +421,7 @@ export const useStore = create((set, get) => ({
     set((s) => ({
       past: [...s.past, snapshot(s)],
       future: [],
-      walls: [], openings: [], fences: [], gates: [], posts: [], labels: [], stairs: [], roomNames: {},
+      walls: [], openings: [], fences: [], gates: [], posts: [], labels: [], stairs: [], roomNames: {}, roomLabelPos: {},
       selection: null,
     })),
 

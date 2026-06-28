@@ -22,15 +22,16 @@ export default function Canvas2D() {
   const layerRef = useRef(null);
 
   const store = useStore();
-  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, posts, labels, stairs, selection, multi, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, layers, detachCorner, roomNames } = store;
+  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, posts, labels, stairs, selection, multi, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, layers, detachCorner, roomNames, roomLabelPos } = store;
   // closed wall loops → rooms. Always detected so the interior gets a white
   // floor; the `showRoomAreas` toggle only governs the numeric area label.
-  // Each room carries its bounding-wall ids, a stable signature, and its name.
+  // Each room carries its bounding-wall ids, a stable signature, its name, and
+  // its label position (a dragged override, else the room centroid).
   const rooms = useMemo(() => detectRooms(walls).map((rm) => {
     const wallIds = roomWalls(rm, walls);
     const sig = roomSignature(wallIds);
-    return { ...rm, wallIds, sig, name: (roomNames || {})[sig] || '' };
-  }), [walls, roomNames]);
+    return { ...rm, wallIds, sig, name: (roomNames || {})[sig] || '', labelPos: (roomLabelPos || {})[sig] || rm.centroid };
+  }), [walls, roomNames, roomLabelPos]);
   const t = CANVAS_THEME[theme] || CANVAS_THEME.light;
 
   const [size, setSize] = useState({ w: 800, h: 600 });
@@ -470,6 +471,15 @@ export default function Canvas2D() {
     drag.current = { kind: 'group', items: rm.wallIds.map((id) => ({ type: 'wall', id })), last: snapEnabled ? snapPt(raw, minorStep) : raw, moved: false, before: useStore.getState().snapshotGeom() };
   };
 
+  // drag a room's NAME/AREA label to reposition it (independent of the room).
+  // Selects the room too, so the grip handle shows while you drag.
+  const startRoomLabelDrag = (rm) => (e) => {
+    e.cancelBubble = true;
+    if (tool !== 'select') return;
+    store.selectRoom(rm.sig, rm.wallIds);
+    drag.current = { kind: 'roomLabel', sig: rm.sig, moved: false, before: useStore.getState().snapshotGeom() };
+  };
+
   // drag the group bounding box to move every selected element together
   const startGroupDrag = (e) => {
     e.cancelBubble = true;
@@ -610,6 +620,9 @@ export default function Canvas2D() {
           }
         }
       }
+    } else if (d.kind === 'roomLabel') {
+      const pt = snapEnabled ? snapPt(raw, minorStep) : raw;
+      store.setRoomLabelPos(d.sig, pt);
     } else if (d.kind === 'labelPos') {
       store.updateElement('label', d.id, { pos: { x: raw.x, y: raw.y } });
     } else if (d.kind === 'labelAnchor') {
@@ -1041,20 +1054,36 @@ export default function Canvas2D() {
           )}
 
           {/* room labels: the name (if set) sits above the interior area, as plain
-              black text — no pill, no border, no background. listening=false so a
-              click falls through to the floor → selects the room. The area number
-              obeys the Canvas "show room areas" toggle. */}
+              black text — no pill/border/background. Tap-and-drag the label to
+              relocate it; a grip handle appears once the room is selected. The
+              area number obeys the Canvas "show room areas" toggle. */}
           {rooms.map((rm, i) => {
             const area = `${Math.round(rm.area)} sq ft`;
             if (!rm.name && !showRoomAreas) return null;
             const W = 240; // generous box so centered text never clips
+            const selRoom = selection?.type === 'room' && selection.id === rm.sig;
+            const nameY = showRoomAreas ? -19 : -8;
+            const hitW = Math.max((rm.name || '').length * 8.5, area.length * 7, 30) + 14;
+            const hitTop = (rm.name ? nameY : -8) - 3;
+            const hitH = (rm.name && showRoomAreas) ? 42 : 24;
+            const gripY = hitTop - 5; // grip sits just above the text
+            const dots = []; for (const dy of [-2.2, 2.2]) for (const dx of [-4.4, 0, 4.4]) dots.push({ dx, dy });
             return (
-              <Group key={'room' + i} x={rm.centroid.x * scale} y={rm.centroid.y * scale} scaleX={1 / view.k} scaleY={1 / view.k} listening={false}>
+              <Group key={'room' + i} x={rm.labelPos.x * scale} y={rm.labelPos.y * scale} scaleX={1 / view.k} scaleY={1 / view.k}
+                listening={tool === 'select'} onMouseDown={startRoomLabelDrag(rm)} onTouchStart={startRoomLabelDrag(rm)}>
+                {/* invisible hit area so the whole label is grab-able to drag */}
+                <Rect x={-hitW / 2} y={hitTop} width={hitW} height={hitH} fill="rgba(0,0,0,0.001)" />
+                {selRoom && (
+                  <Group y={gripY}>
+                    <Rect x={-11} y={-6.5} width={22} height={13} cornerRadius={6.5} fill={BLUE} />
+                    {dots.map((d, k) => <Circle key={k} x={d.dx} y={d.dy} radius={1.1} fill="#fff" listening={false} />)}
+                  </Group>
+                )}
                 {rm.name && (
-                  <Text x={-W / 2} y={showRoomAreas ? -19 : -8} width={W} align="center" text={rm.name} fontSize={14} fontStyle="700" fill={t.roomText} />
+                  <Text x={-W / 2} y={nameY} width={W} align="center" text={rm.name} fontSize={14} fontStyle="700" fill={t.roomText} listening={false} />
                 )}
                 {showRoomAreas && (
-                  <Text x={-W / 2} y={rm.name ? 2 : -7} width={W} align="center" text={area} fontSize={12} fontStyle="600" fill={t.roomText} />
+                  <Text x={-W / 2} y={rm.name ? 2 : -7} width={W} align="center" text={area} fontSize={12} fontStyle="600" fill={t.roomText} listening={false} />
                 )}
               </Group>
             );

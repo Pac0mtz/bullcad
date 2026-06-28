@@ -16,11 +16,12 @@ const r2 = (n) => Math.round(n * 1000) / 1000;
 
 // A dimension label drawn inside a white rounded pill (matches the on-screen look).
 function dimPill(x, y, angle, text, fs) {
-  const w = text.length * fs * 0.6 + fs * 0.5;
-  const h = fs * 1.45;
+  // text only — no pill box/border. A white halo keeps the number readable
+  // where it crosses the dimension line.
+  const attrs = `x="0" y="${r2(fs * 0.33)}" font-size="${fs}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="bold"`;
   return `<g transform="translate(${r2(x)} ${r2(y)}) rotate(${r2(angle)})">`
-    + `<rect x="${r2(-w / 2)}" y="${r2(-h / 2)}" width="${r2(w)}" height="${r2(h)}" rx="${r2(fs * 0.3)}" fill="#ffffff" stroke="#cbd5e1" stroke-width="0.01"/>`
-    + `<text x="0" y="${r2(fs * 0.33)}" font-size="${fs}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="bold" fill="${NAVY}">${text}</text>`
+    + `<text ${attrs} fill="none" stroke="#ffffff" stroke-width="${r2(fs * 0.32)}" stroke-linejoin="round">${text}</text>`
+    + `<text ${attrs} fill="${NAVY}">${text}</text>`
     + `</g>`;
 }
 
