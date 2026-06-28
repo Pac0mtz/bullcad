@@ -37,3 +37,4 @@ export const IconCollapseLeft = (p) => (<S {...p}><rect x="3" y="4" width="18" h
 export const IconCollapseRight = (p) => (<S {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M10 4v16" /><path d="M13.5 9.5L16 12l-2.5 2.5" /></S>);
 export const IconSparkle = (p) => (<S {...p}><path d="M12 3l1.8 4.9L19 9.7l-5.2 1.8L12 16l-1.8-4.5L5 9.7l5.2-1.8z" /><path d="M19 14l.7 1.9 2.1.7-2.1.7-.7 1.9-.7-1.9-2.1-.7 2.1-.7z" /></S>);
 export const IconSend = (p) => (<S {...p}><path d="M4 12l16-7-7 16-2.5-6.5z" /></S>);
+export const IconImage = (p) => (<S {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="8.5" cy="9.5" r="1.5" /><path d="M5 19l5-5 3 3 3-3 3 3" /></S>);

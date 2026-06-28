@@ -903,3 +903,26 @@ kbd {
     height: min(70vh, calc(100vh - 70px));
   }
 }
+
+/* AI image-import: attach button, pending thumbnail, in-message preview */
+.ai-chip.import { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; color: var(--blue); border-color: var(--blue); }
+.ai-chip.import:hover { background: rgba(37,99,235,0.08); }
+.ai-tip { font-size: 11.5px; line-height: 1.45; margin: 12px 0 0; }
+
+.ai-attach-btn {
+  width: 40px; height: 40px; flex: none; border: 1px solid var(--slate-200); border-radius: 10px; cursor: pointer;
+  background: var(--surface); color: var(--muted); display: inline-flex; align-items: center; justify-content: center;
+}
+.ai-attach-btn:hover { color: var(--text); border-color: var(--teal); }
+.ai-attach-btn:disabled { opacity: 0.5; cursor: default; }
+
+.ai-attach {
+  display: flex; align-items: center; gap: 8px; margin: 0 10px;
+  padding: 6px 8px; border: 1px solid var(--slate-200); border-radius: 10px; background: var(--slate-bg);
+}
+.ai-attach img { width: 34px; height: 34px; object-fit: cover; border-radius: 6px; flex: none; }
+.ai-attach-name { flex: 1; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-attach-x { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; width: 22px; height: 22px; border-radius: 6px; }
+.ai-attach-x:hover { background: var(--slate-200); color: var(--text); }
+
+.ai-msg-img { display: block; max-width: 100%; max-height: 160px; border-radius: 8px; margin-bottom: 6px; }
