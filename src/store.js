@@ -81,6 +81,7 @@ export const useStore = create((set, get) => ({
   mode: '2d', // '2d' | '3d'
   tool: 'select',
   exportOpen: false, // PDF export options modal
+  aiOpen: false, // AI assistant panel
   theme: 'light', // 'light' | 'dark' — UI + canvas appearance (not part of undo history)
   scale: _initSettings.scale ?? 12, // pixels per foot
   grid: _initSettings.grid ?? 1, // feet per grid cell
@@ -152,6 +153,7 @@ export const useStore = create((set, get) => ({
 
   // ---- generic helpers ----
   setExportOpen: (exportOpen) => set({ exportOpen }),
+  setAiOpen: (aiOpen) => set({ aiOpen }),
   setMode: (mode) => set({ mode }),
   setTheme: (theme) => set({ theme }),
   toggleTheme: () => set((s) => ({ theme: s.theme === 'light' ? 'dark' : 'light' })),

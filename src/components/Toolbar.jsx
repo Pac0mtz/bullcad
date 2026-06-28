@@ -2,7 +2,7 @@ import React from 'react';
 import { useStore } from '../store.js';
 import {
   IconUndo, IconRedo, IconExport, IconImport, IconNew,
-  IconSun, IconMoon, IconPdf,
+  IconSun, IconMoon, IconPdf, IconSparkle,
 } from './Icons.jsx';
 // All tools — including Select/Pan — now live in the left "Tools" sidebar; the
 // header keeps only history (undo/redo), view, and file actions.
@@ -29,6 +29,8 @@ export default function Toolbar({ fileRef }) {
   const newPlan = useStore((s) => s.newPlan);
   const exportPlan = useStore((s) => s.exportPlan);
   const setExportOpen = useStore((s) => s.setExportOpen);
+  const aiOpen = useStore((s) => s.aiOpen);
+  const setAiOpen = useStore((s) => s.setAiOpen);
 
   return (
     <header className="toolbar">
@@ -67,6 +69,10 @@ export default function Toolbar({ fileRef }) {
           {theme === 'light' ? <IconMoon /> : <IconSun />}
         </button>
       </div>
+
+      <button className={'btn ghost ai-toggle' + (aiOpen ? ' active' : '')} onClick={() => setAiOpen(!aiOpen)} title="AI assistant — build & edit by chat">
+        <IconSparkle /> <span className="btn-label">AI</span>
+      </button>
 
       <div className="tbar-sep" />
 

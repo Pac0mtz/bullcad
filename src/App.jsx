@@ -7,6 +7,7 @@ import Canvas2D from './components/Canvas2D.jsx';
 import Scene3D from './components/Scene3D.jsx';
 import ElevationCanvas from './components/ElevationCanvas.jsx';
 import ExportModal from './components/ExportModal.jsx';
+import AssistantPanel from './components/AssistantPanel.jsx';
 import PageTabs from './components/PageTabs.jsx';
 import { IconCollapseLeft, IconCollapseRight, IconTools, IconSettings } from './components/Icons.jsx';
 
@@ -113,6 +114,7 @@ export default function App() {
       </div>
 
       <ExportModal />
+      <AssistantPanel />
       {/* hidden import input, triggered from Toolbar */}
       <input
         ref={fileRef}
