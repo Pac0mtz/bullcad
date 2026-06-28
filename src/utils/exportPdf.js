@@ -57,7 +57,7 @@ export function buildPlanSvg(model, opts = {}) {
   // feet value that renders as 10pt. Fallback when the fit box isn't supplied.
   const sc = (opts.fitW > 0 && opts.fitH > 0) ? Math.min(opts.fitW / wFt, opts.fitH / hFt) : 12;
   const ptFt = (pt) => pt / sc;
-  const dimFs = ptFt(10);              // dimension numbers: 10 pt
+  const dimFs = ptFt(opts.dimLabelPt || 7); // dimension numbers (default 7 pt — matches the app's relative size)
   const DIMW = 0.035;                  // dim-line stroke (feet)
   // a dimension line split around its label (───┤ 13' 6" ├───) so it never
   // strikes through the number
@@ -178,22 +178,27 @@ export function buildPlanSvg(model, opts = {}) {
     el.push(`<g transform="translate(${r2(c.x)} ${r2(c.y)}) rotate(${ang})">${inner}</g>`);
   });
 
-  const kinds = opts.dimMode === 'off' ? []
-    : opts.dimMode === 'both' ? ['interior', 'exterior']
-    : [opts.dimMode || 'exterior'];
+  const kindsFor = (m) => (m === 'off' ? [] : m === 'both' ? ['interior', 'exterior'] : [m]);
   const baseOff = opts.dimOffset ?? 1;
   const unit = opts.dimUnit; // undefined = feet-inches; 'in' = inches only
   const hasOpenings = openings.length > 0;
   const ROW_GAP = 1.6;
-  walls.forEach((w) => kinds.forEach((k) => {
-    const extra = hasOpenings && k !== 'interior' ? ROW_GAP : 0;
-    const dg = wallDimGeometry(w, k, (w.dimOff ?? baseOff) + extra, centroid, wj, unit);
-    if (!dg) return;
-    dg.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.035"/>`));
-    el.push(dimLineSVG(dg.line[0], dg.line[1], dg.label.text, dimFs));
-    dg.slashes.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.06"/>`));
-    el.push(dimPill(dg.label.x, dg.label.y, dg.label.angle, dg.label.text, dimFs));
-  }));
+  walls.forEach((w) => {
+    // per-wall kinds, exactly like the on-screen plan: honor a per-wall dimMode
+    // override, and dimension interior walls by their TRUE span (interior) rather
+    // than an exterior face that overshoots into the walls they tie into
+    const kinds = [...new Set(kindsFor(w.dimMode || opts.dimMode || 'exterior')
+      .map((k) => (k === 'exterior' && !w.exterior ? 'interior' : k)))];
+    kinds.forEach((k) => {
+      const extra = hasOpenings && k !== 'interior' ? ROW_GAP : 0;
+      const dg = wallDimGeometry(w, k, (w.dimOff ?? baseOff) + extra, centroid, wj, unit);
+      if (!dg) return;
+      dg.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.035"/>`));
+      el.push(dimLineSVG(dg.line[0], dg.line[1], dg.label.text, dimFs));
+      dg.slashes.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.06"/>`));
+      el.push(dimPill(dg.label.x, dg.label.y, dg.label.angle, dg.label.text, dimFs));
+    });
+  });
 
   // opening dimension strings (wall length split at every opening)
   if (opts.dimMode !== 'off') walls.forEach((w) => {
@@ -280,7 +285,7 @@ export function buildPlanSvg(model, opts = {}) {
     const showArea = opts.showRoomAreas !== false;
     if (!name && !showArea) return;
     const cx = rm.centroid.x, cy = rm.centroid.y;
-    const nameFs = ptFt(13), areaFs = ptFt(11); // room labels in real points too
+    const nameFs = ptFt(10), areaFs = ptFt(8.5); // room labels in real points too
     if (name) el.push(roomLabel(cx, cy - (showArea ? areaFs * 0.75 : -areaFs * 0.35), escXml(name), nameFs, true));
     if (showArea) el.push(roomLabel(cx, cy + (name ? nameFs * 0.85 : areaFs * 0.35), `${Math.round(rm.area)} sq ft`, areaFs, false));
   });
@@ -636,34 +641,42 @@ async function drawElevationsPage(doc, elevations, model, opts, format, orientat
   }
   if (!built.length) return;
 
-  doc.addPage(format, orientation);
-  const PW = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight(), M = 28;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(10, 37, 64);
-  doc.text((opts.title || 'PlanForge Plan') + ' — Elevations', M, M + 12);
-  doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.8); doc.line(M, M + 20, PW - M, M + 20);
+  // Paginate: at most PER_PAGE elevations per page (2 cols × 3 rows) so each one
+  // is large enough to read, instead of cramming them all onto one tiny grid.
+  const PER_PAGE = 6;
+  const pages = Math.ceil(built.length / PER_PAGE);
+  for (let p = 0; p < pages; p++) {
+    const chunk = built.slice(p * PER_PAGE, p * PER_PAGE + PER_PAGE);
+    doc.addPage(format, orientation);
+    const PW = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight(), M = 28;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(10, 37, 64);
+    const heading = (opts.title || 'PlanForge Plan') + ' — Elevations' + (pages > 1 ? ` (${p + 1}/${pages})` : '');
+    doc.text(heading, M, M + 12);
+    doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.8); doc.line(M, M + 20, PW - M, M + 20);
 
-  const cols = built.length > 2 ? 2 : 1;
-  const rows = Math.ceil(built.length / cols);
-  const gap = 18, top = M + 34, capH = 24;
-  const cellW = (PW - M * 2 - gap * (cols - 1)) / cols;
-  const cellH = (PH - top - M - gap * (rows - 1)) / rows;
-  for (let i = 0; i < built.length; i++) {
-    const v = built[i], r = Math.floor(i / cols), c = i % cols;
-    const x = M + c * (cellW + gap), y = top + r * (cellH + gap);
-    const availH = cellH - capH;
-    const sc = Math.min(cellW / v.wFt, availH / v.hFt);
-    const dw = v.wFt * sc, dh = v.hFt * sc;
-    const ix = x + (cellW - dw) / 2, iy = y + (availH - dh) / 2;
-    const holder = document.createElement('div');
-    holder.style.cssText = 'position:fixed;left:-9999px;top:0';
-    holder.innerHTML = v.svg;
-    document.body.appendChild(holder);
-    try { await svg2pdf(holder.querySelector('svg'), doc, { x: ix, y: iy, width: dw, height: dh }); } finally { holder.remove(); }
-    // caption: wall/fence title, then the facing orientation on the line below
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(10, 37, 64);
-    doc.text(v.label, x + cellW / 2, y + cellH - 12, { align: 'center' });
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(37, 99, 235);
-    doc.text('Faces ' + (FACING_NAMES[v.facing] || v.facing || ''), x + cellW / 2, y + cellH - 3, { align: 'center' });
+    const cols = chunk.length > 1 ? 2 : 1;
+    const rows = Math.ceil(chunk.length / cols);
+    const gap = 18, top = M + 34, capH = 24;
+    const cellW = (PW - M * 2 - gap * (cols - 1)) / cols;
+    const cellH = (PH - top - M - gap * (rows - 1)) / rows;
+    for (let i = 0; i < chunk.length; i++) {
+      const v = chunk[i], r = Math.floor(i / cols), c = i % cols;
+      const x = M + c * (cellW + gap), y = top + r * (cellH + gap);
+      const availH = cellH - capH;
+      const sc = Math.min(cellW / v.wFt, availH / v.hFt);
+      const dw = v.wFt * sc, dh = v.hFt * sc;
+      const ix = x + (cellW - dw) / 2, iy = y + (availH - dh) / 2;
+      const holder = document.createElement('div');
+      holder.style.cssText = 'position:fixed;left:-9999px;top:0';
+      holder.innerHTML = v.svg;
+      document.body.appendChild(holder);
+      try { await svg2pdf(holder.querySelector('svg'), doc, { x: ix, y: iy, width: dw, height: dh }); } finally { holder.remove(); }
+      // caption: wall/fence title, then the facing orientation on the line below
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(10, 37, 64);
+      doc.text(v.label, x + cellW / 2, y + cellH - 12, { align: 'center' });
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(37, 99, 235);
+      doc.text('Faces ' + (FACING_NAMES[v.facing] || v.facing || ''), x + cellW / 2, y + cellH - 3, { align: 'center' });
+    }
   }
 }
 
