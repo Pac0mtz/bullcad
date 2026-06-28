@@ -477,6 +477,32 @@ body {
   50% { box-shadow: var(--shadow-lg), 0 0 0 5px rgba(20,184,166,0.12); }
 }
 
+/* wall/fence drawing toolbar (top-center): live thickness + Exit Drawing */
+.draw-toolbar {
+  position: absolute;
+  top: 14px; left: 50%; transform: translateX(-50%);
+  z-index: 10;
+  display: flex; align-items: center; gap: 14px;
+  background: rgba(10, 37, 64, 0.95); color: #fff;
+  font-size: 12.5px; font-weight: 600;
+  padding: 7px 9px 7px 16px; border-radius: 12px;
+  box-shadow: var(--shadow-lg); white-space: nowrap;
+}
+.draw-toolbar .dt-hint { opacity: 0.92; }
+.draw-toolbar .dt-thick { display: flex; align-items: center; gap: 7px; }
+.draw-toolbar .dt-label { opacity: 0.7; font-weight: 600; }
+.draw-toolbar .dt-val { min-width: 30px; text-align: center; font-variant-numeric: tabular-nums; }
+.draw-toolbar .dt-thick button {
+  width: 26px; height: 26px; border: none; border-radius: 7px;
+  background: rgba(255,255,255,0.14); color: #fff; font-size: 16px; line-height: 1; cursor: pointer;
+}
+.draw-toolbar .dt-thick button:hover { background: rgba(255,255,255,0.24); }
+.draw-toolbar .dt-exit {
+  border: none; border-radius: 8px; padding: 6px 14px;
+  background: var(--orange, #f97316); color: #fff; font-weight: 700; cursor: pointer;
+}
+.draw-toolbar .dt-exit:hover { filter: brightness(1.06); }
+
 /* touch coach — sits low (above the bottom drawer toggles) once a run starts */
 .draw-coach {
   position: absolute;

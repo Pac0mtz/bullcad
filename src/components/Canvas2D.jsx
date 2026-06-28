@@ -1078,12 +1078,28 @@ export default function Canvas2D() {
         );
       })()}
 
-      {/* start-drawing prompt — tells you to tap/click to drop the first point */}
-      {['wall', 'fence', 'room'].includes(tool) && !draft && !measure.length && (
-        <div className="draw-hint">
-          {tool === 'room'
-            ? (coarse ? 'Tap one corner, then the opposite' : 'Click one corner, then the opposite')
-            : (coarse ? `Tap to start the ${tool} · tap each corner` : `Click to start the ${tool}`)}
+      {/* room start prompt */}
+      {tool === 'room' && !draft && (
+        <div className="draw-hint">{coarse ? 'Tap one corner, then the opposite' : 'Click one corner, then the opposite'}</div>
+      )}
+
+      {/* wall/fence drawing toolbar — live thickness + Exit Drawing (magicplan-style) */}
+      {(tool === 'wall' || tool === 'fence') && (
+        <div className="draw-toolbar">
+          <span className="dt-hint">{draft ? `Drawing ${tool} — ${coarse ? 'tap' : 'click'} each corner` : `${coarse ? 'Tap' : 'Click'} to start the ${tool}`}</span>
+          {tool === 'wall' && (() => {
+            const inch = store.wallThickness * 12;
+            const step = (d) => store.setDefault('wallThickness', Math.max(1, Math.min(24, inch + d)) / 12);
+            return (
+              <div className="dt-thick">
+                <span className="dt-label">Thickness</span>
+                <button onClick={() => step(-0.5)} aria-label="Thinner">−</button>
+                <span className="dt-val">{Number.isInteger(inch) ? inch : inch.toFixed(1)}″</span>
+                <button onClick={() => step(0.5)} aria-label="Thicker">+</button>
+              </div>
+            );
+          })()}
+          <button className="dt-exit" onMouseDown={(e) => { e.preventDefault(); finishRun(true); }}>Exit Drawing</button>
         </div>
       )}
 
