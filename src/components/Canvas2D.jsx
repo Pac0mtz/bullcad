@@ -632,12 +632,16 @@ export default function Canvas2D() {
   // every wall + fence corner, deduped — drawn as a small gray grip that's always
   // visible (turns blue when its element is selected, via the handles below)
   const cornerDots = useMemo(() => {
-    const seen = new Set(), pts = [];
-    [...walls, ...fences].forEach((e) => [e.a, e.b].forEach((p) => {
+    const m = new Map(); // key -> { x, y, thick } (thickest wall/fence body at this corner)
+    const addPt = (p, th) => {
       const k = `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
-      if (!seen.has(k)) { seen.add(k); pts.push(p); }
-    }));
-    return pts;
+      const cur = m.get(k);
+      if (cur) cur.thick = Math.max(cur.thick, th);
+      else m.set(k, { x: p.x, y: p.y, thick: th });
+    };
+    walls.forEach((w) => [w.a, w.b].forEach((p) => addPt(p, w.thickness || 0.5)));
+    fences.forEach((f) => [f.a, f.b].forEach((p) => addPt(p, FENCE_THICK)));
+    return [...m.values()];
   }, [walls, fences]);
 
   // building center — tells interior from exterior for dimensioning + alignment
@@ -784,20 +788,18 @@ export default function Canvas2D() {
 
           {/* always-visible gray corner grips on every wall + fence corner
               (the selected element's corners get blue handles on top, below) */}
-          {(() => {
-            // grips scale with the wall body (≈ wall width) so they read as corner
-            // grips at any zoom, clamped so they stay usable when zoomed way out/in
-            const gripR = Math.max(coarse ? 4.5 : 3.5, Math.min(0.45 * 0.375 * scale * view.k, coarse ? 26 : 22));
-            return (
-              <Group listening={false}>
-                {cornerDots.map((p, i) => (
-                  <Group key={'cd' + i} x={p.x * scale} y={p.y * scale} scaleX={1 / view.k} scaleY={1 / view.k}>
-                    <Circle radius={gripR} fill="#94a3b8" stroke="#fff" strokeWidth={Math.max(1, gripR * 0.12)} />
-                  </Group>
-                ))}
-              </Group>
-            );
-          })()}
+          {/* each grip's DIAMETER matches its corner's wall thickness, so it reads as
+              a round post filling the wall at the corner (min size keeps it tappable) */}
+          <Group listening={false}>
+            {cornerDots.map((p, i) => {
+              const r = Math.max(coarse ? 4 : 3, p.thick / 2 * scale * view.k); // = wall thickness on screen
+              return (
+                <Group key={'cd' + i} x={p.x * scale} y={p.y * scale} scaleX={1 / view.k} scaleY={1 / view.k}>
+                  <Circle radius={r} fill="#94a3b8" stroke="#fff" strokeWidth={Math.max(1, r * 0.1)} />
+                </Group>
+              );
+            })}
+          </Group>
 
           {/* selected wall/fence endpoint handles — round blue = move the whole
               joined corner; amber diamond (only at shared corners, pulled into

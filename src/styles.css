@@ -588,7 +588,7 @@ kbd {
 }
 
 /* ---------- Mobile drawer chrome (hidden on desktop) ---------- */
-.drawer-toggle { display: none; }
+.drawer-fab { display: none; }
 .drawer-backdrop { display: none; }
 
 /* ---------- Responsive ---------- */
@@ -665,37 +665,41 @@ kbd {
     z-index: 35;
   }
 
-  .drawer-toggle {
-    display: block;
+  /* icon FAB: Tools + Properties stacked vertically on the lower-right */
+  .drawer-fab {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
     position: fixed;
-    bottom: 16px;
+    right: 14px;
+    bottom: 18px;
     z-index: 45;
-    height: 40px;
-    padding: 0 16px;
+  }
+  .fab-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
     border: none;
-    border-radius: 999px;
+    border-radius: 50%;
     background: var(--navy);
     color: #fff;
-    font-weight: 700;
-    font-size: 13px;
     box-shadow: var(--shadow-lg);
     cursor: pointer;
   }
-  .drawer-toggle.left { left: 14px; }
-  .drawer-toggle.right { right: 14px; }
-  .drawer-toggle.active { background: var(--teal); color: #03201c; }
+  .fab-btn.active { background: var(--teal); color: #03201c; }
 
-  /* Bottom HUD: the verbose hint overflows on phones and duplicates the
-     touch-obvious interactions — drop it. The scale readout shrinks to grid +
-     zoom and centers between the Tools / Properties toggles; the fence legend
-     lifts above the toggle row so nothing overlaps. */
+  /* Bottom HUD: the verbose hint overflows on phones — drop it. The scale
+     readout centers along the bottom; the fence legend lifts above the
+     lower-right FAB so nothing overlaps. */
   .hint { display: none; }
   .sr-pan { display: none; }
   .scale-readout {
     left: 50%; right: auto; transform: translateX(-50%);
     bottom: 18px; font-size: 11px; padding: 6px 12px;
   }
-  .fence-legend { bottom: 66px; right: 12px; padding: 7px 9px; min-width: 0; opacity: 0.96; }
+  .fence-legend { bottom: 140px; right: 12px; padding: 7px 9px; min-width: 0; opacity: 0.96; }
   .fence-legend .fl-title { font-size: 8.5px; margin-bottom: 4px; }
   .fence-legend .fl-row { font-size: 11px; gap: 7px; padding: 1px 0; }
   .compass-control { top: 10px; left: 10px; transform: scale(0.82); transform-origin: top left; }

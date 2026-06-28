@@ -8,7 +8,7 @@ import Scene3D from './components/Scene3D.jsx';
 import ElevationCanvas from './components/ElevationCanvas.jsx';
 import ExportModal from './components/ExportModal.jsx';
 import PageTabs from './components/PageTabs.jsx';
-import { IconCollapseLeft, IconCollapseRight } from './components/Icons.jsx';
+import { IconCollapseLeft, IconCollapseRight, IconTools, IconSettings } from './components/Icons.jsx';
 
 export default function App() {
   const mode = useStore((s) => s.mode);
@@ -100,15 +100,17 @@ export default function App() {
         <div className="drawer-backdrop" onClick={() => setDrawer(null)} />
       </div>
 
-      {/* mobile-only: bottom toggles for the side panels */}
-      <button className={'drawer-toggle left' + (drawer === 'left' ? ' active' : '')}
-        onClick={() => setDrawer((d) => (d === 'left' ? null : 'left'))}>
-        Tools
-      </button>
-      <button className={'drawer-toggle right' + (drawer === 'right' ? ' active' : '')}
-        onClick={() => setDrawer((d) => (d === 'right' ? null : 'right'))}>
-        Properties
-      </button>
+      {/* mobile-only: icon FAB stacked on the lower-right — Tools + Properties */}
+      <div className="drawer-fab">
+        <button className={'fab-btn' + (drawer === 'left' ? ' active' : '')} aria-label="Tools"
+          onClick={() => setDrawer((d) => (d === 'left' ? null : 'left'))}>
+          <IconTools style={{ width: 22, height: 22 }} />
+        </button>
+        <button className={'fab-btn' + (drawer === 'right' ? ' active' : '')} aria-label="Properties"
+          onClick={() => setDrawer((d) => (d === 'right' ? null : 'right'))}>
+          <IconSettings style={{ width: 22, height: 22 }} />
+        </button>
+      </div>
 
       <ExportModal />
       {/* hidden import input, triggered from Toolbar */}

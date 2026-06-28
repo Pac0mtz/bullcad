@@ -7,6 +7,8 @@ const S = (props) => (
 );
 
 export const IconSelect = (p) => (<S {...p}><path d="M5 3l14 8-6 1.5L11 19z" /></S>);
+export const IconTools = (p) => (<S {...p}><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></S>);
+export const IconSettings = (p) => (<S {...p}><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h6M14 18h6" /><circle cx="16" cy="6" r="2" /><circle cx="8" cy="12" r="2" /><circle cx="12" cy="18" r="2" /></S>);
 export const IconWall = (p) => (<S {...p}><path d="M3 18h18" /><path d="M5 18V9l7-4 7 4v9" /></S>);
 export const IconDoor = (p) => (<S {...p}><rect x="6" y="3" width="12" height="18" rx="1" /><circle cx="14.5" cy="12" r="1" fill="currentColor" stroke="none" /></S>);
 export const IconWindow = (p) => (<S {...p}><rect x="4" y="4" width="16" height="16" rx="1" /><path d="M12 4v16M4 12h16" /></S>);
