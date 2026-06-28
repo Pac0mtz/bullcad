@@ -9,7 +9,6 @@ const FENCE_THICK = 0.3; // nominal fence body width (ft) for alignment offset
 import { CANVAS_THEME } from '../utils/theme.js';
 import { WallShape, OpeningShape, FenceShape, GateShape, PostShape, DimLabel, WallDimension, WallOpeningDims, LabelShape, StairShape } from './canvas/Shapes.jsx';
 import { IconZoomIn, IconZoomOut, IconFit } from './Icons.jsx';
-import FenceLegend from './FenceLegend.jsx';
 import Compass from './Compass.jsx';
 
 const NAVY = '#0a2540';
@@ -188,10 +187,11 @@ export default function Canvas2D() {
     return { ...m, anchor: end, pointer: end };
   });
 
-  // focus the length-entry box as soon as a wall/fence run is started
+  // focus the length-entry box as soon as a wall/fence run is started — but NOT
+  // on touch, where auto-popping the keyboard hides the plan (tap the field to type)
   useEffect(() => {
-    if (draft && (tool === 'wall' || tool === 'fence')) lenInputRef.current?.focus();
-  }, [draft, tool]);
+    if (!coarse && draft && (tool === 'wall' || tool === 'fence')) lenInputRef.current?.focus();
+  }, [draft, tool, coarse]);
 
   // commit a segment of an exact typed length, in the current cursor direction
   const commitTypedLength = () => {
@@ -1259,8 +1259,11 @@ export default function Canvas2D() {
         const px = view.x + p.x * scale * view.k;
         const py = Math.max(28, Math.min(size.h - 28, view.y + p.y * scale * view.k));
         const flipLeft = px > size.w - 180; // not enough room on the right → put it on the left
+        // on touch, pin it to a bottom bar (see .le-bottom) instead of floating
+        // over the drawing where it obstructs the plan
+        const style = coarse ? undefined : { left: px, top: py, right: 'auto', bottom: 'auto', transform: flipLeft ? 'translate(calc(-100% - 14px), -50%)' : 'translate(14px, -50%)' };
         return (
-          <div className="len-entry" style={{ left: px, top: py, right: 'auto', bottom: 'auto', transform: flipLeft ? 'translate(calc(-100% - 14px), -50%)' : 'translate(14px, -50%)' }}>
+          <div className={'len-entry' + (coarse ? ' le-bottom' : '')} style={style}>
             <input ref={lenInputRef} type="text" inputMode="decimal" value={lenStr}
               placeholder={cursor ? formatFeetInches(dist(draft, cursor)) : '—'}
               onChange={(e) => setLenStr(e.target.value)}
@@ -1329,7 +1332,8 @@ export default function Canvas2D() {
         </div>
       )}
 
-      <FenceLegend fences={fences} />
+      {/* fence legend lives in the Properties → Quantities panel now (it listed the
+          same fence types with glyphs); keeping it off the canvas declutters mobile */}
     </div>
   );
 }

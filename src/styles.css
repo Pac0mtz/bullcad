@@ -581,6 +581,27 @@ button:focus-visible,
   .len-entry .le-finish { height: 36px; padding: 0 14px; font-size: 13.5px; }
 }
 
+/* touch: length entry sits as a bottom bar (set via the .le-bottom class on
+   touch devices) instead of floating over the drawing where it obstructs */
+.len-entry.le-bottom {
+  left: 12px; right: 12px; top: auto; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  transform: none; justify-content: space-between; gap: 10px; padding: 8px 8px 8px 10px;
+  border-radius: 14px; z-index: 47;
+}
+.len-entry.le-bottom input { flex: 1 1 auto; width: auto; height: 42px; font-size: 15px; }
+.len-entry.le-bottom .le-finish { height: 42px; padding: 0 18px; font-size: 14.5px; }
+
+/* phones: the draw toolbar shouldn't crowd or overflow — drop the verbose hint,
+   sit below the page tabs, and fit the width */
+@media (max-width: 700px) {
+  .draw-toolbar {
+    left: 10px; right: 10px; transform: none; top: 58px;
+    justify-content: center; gap: 12px; padding: 7px 12px;
+    max-width: none; font-size: 12.5px;
+  }
+  .draw-toolbar .dt-hint, .draw-toolbar .dt-label { display: none; }
+}
+
 .scale-readout {
   position: absolute;
   bottom: 14px; left: 14px;
