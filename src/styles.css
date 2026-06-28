@@ -591,6 +591,39 @@ button:focus-visible,
 .len-entry.le-bottom input { flex: 1 1 auto; width: auto; height: 42px; font-size: 15px; }
 .len-entry.le-bottom .le-finish { height: 42px; padding: 0 18px; font-size: 14.5px; }
 
+/* selected-wall quick actions — compact dark pill floating at the wall midpoint
+   (matches the draw-toolbar look): thickness stepper + delete */
+.wall-quick {
+  position: absolute;
+  z-index: 11;
+  transform: translate(-50%, -50%);
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(10, 37, 64, 0.95); color: #fff;
+  padding: 5px 6px; border-radius: 11px;
+  box-shadow: var(--shadow-lg); white-space: nowrap;
+  pointer-events: auto;
+}
+.wall-quick .wq-thick { display: flex; align-items: center; gap: 6px; }
+.wall-quick .wq-val {
+  min-width: 30px; text-align: center; font-size: 12.5px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.wall-quick .wq-thick button {
+  width: 26px; height: 26px; border: none; border-radius: 7px;
+  background: rgba(255,255,255,0.14); color: #fff; font-size: 16px; line-height: 1; cursor: pointer;
+}
+.wall-quick .wq-thick button:hover { background: rgba(255,255,255,0.24); }
+.wall-quick .wq-del {
+  width: 26px; height: 26px; border: none; border-radius: 7px;
+  background: #ef4444; color: #fff; font-size: 13px; line-height: 1; cursor: pointer;
+}
+.wall-quick .wq-del:hover { filter: brightness(1.08); }
+@media (pointer: coarse) {
+  .wall-quick { gap: 10px; padding: 6px 8px; border-radius: 13px; }
+  .wall-quick .wq-thick button, .wall-quick .wq-del { width: 34px; height: 34px; font-size: 18px; }
+  .wall-quick .wq-val { min-width: 34px; font-size: 14px; }
+}
+
 /* phones: the draw toolbar shouldn't crowd or overflow — drop the verbose hint,
    sit below the page tabs, and fit the width */
 @media (max-width: 700px) {

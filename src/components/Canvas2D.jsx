@@ -1116,12 +1116,24 @@ export default function Canvas2D() {
                   )}
                 </Group>
                 {selRoom && (
-                  <Group x={lx} y={ly + (hitTop - 13)} scaleX={1 / view.k} scaleY={1 / view.k}
-                    onMouseDown={startRoomMove(rm)} onTouchStart={startRoomMove(rm)}
-                    onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
-                    <Circle radius={10} fill={BLUE} stroke="#fff" strokeWidth={1.5} hitStrokeWidth={coarse ? 16 : 8} />
-                    {arrows.map((p, k) => <Line key={k} points={p} stroke="#fff" strokeWidth={1.4} lineCap="round" listening={false} />)}
-                  </Group>
+                  <React.Fragment>
+                    {/* move the whole ROOM — sits clearly ABOVE the label (blue 4-way) */}
+                    <Group x={lx} y={ly + (hitTop - 20)} scaleX={1 / view.k} scaleY={1 / view.k}
+                      onMouseDown={startRoomMove(rm)} onTouchStart={startRoomMove(rm)}
+                      onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
+                      <Circle radius={10} fill={BLUE} stroke="#fff" strokeWidth={1.5} hitStrokeWidth={coarse ? 18 : 8} />
+                      {arrows.map((p, k) => <Line key={k} points={p} stroke="#fff" strokeWidth={1.4} lineCap="round" listening={false} />)}
+                    </Group>
+                    {/* move just the LABEL — sits BELOW it (teal, text-lines icon) */}
+                    <Group x={lx} y={ly + (hitTop + hitH + 16)} scaleX={1 / view.k} scaleY={1 / view.k}
+                      onMouseDown={startRoomLabelDrag(rm)} onTouchStart={startRoomLabelDrag(rm)}
+                      onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
+                      <Circle radius={9} fill="#fff" stroke={TEAL} strokeWidth={2} hitStrokeWidth={coarse ? 18 : 8} />
+                      <Line points={[-4, -3, 4, -3]} stroke={TEAL} strokeWidth={1.4} lineCap="round" listening={false} />
+                      <Line points={[-4, 0, 3, 0]} stroke={TEAL} strokeWidth={1.4} lineCap="round" listening={false} />
+                      <Line points={[-4, 3, 2, 3]} stroke={TEAL} strokeWidth={1.4} lineCap="round" listening={false} />
+                    </Group>
+                  </React.Fragment>
                 )}
               </React.Fragment>
             );
@@ -1271,7 +1283,30 @@ export default function Canvas2D() {
                 if (e.key === 'Enter') { e.preventDefault(); commitTypedLength(); }
                 else if (e.key === 'Escape') { e.preventDefault(); finishRun(false); e.currentTarget.blur(); }
               }} />
-            <button className="le-finish" onMouseDown={(e) => { e.preventDefault(); finishRun(true); }} title="Finish (Enter on empty, or double-click)">✓ End {tool === 'wall' ? 'wall' : 'fence'}</button>
+          </div>
+        );
+      })()}
+
+      {/* selected-wall quick actions — a compact box riding the wall midpoint:
+          nudge thickness or delete without opening the Properties panel */}
+      {selWall && tool === 'select' && (() => {
+        const mid = lerp(selWall.a, selWall.b, 0.5);
+        const px = view.x + mid.x * scale * view.k;
+        const py = view.y + mid.y * scale * view.k;
+        const cx = Math.max(74, Math.min(size.w - 74, px));
+        const cy = Math.max(26, Math.min(size.h - 26, py));
+        const inch = +(selWall.thickness * 12).toFixed(1);
+        const stepT = (d) => store.updateElement('wall', selWall.id, { thickness: Math.max(1, Math.min(24, inch + d)) / 12 }, true);
+        const stop = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); fn(); };
+        return (
+          <div className="wall-quick" style={{ left: cx, top: cy }}
+            onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+            <div className="wq-thick">
+              <button onMouseDown={stop(() => stepT(-0.5))} aria-label="Thinner">−</button>
+              <span className="wq-val">{Number.isInteger(inch) ? inch : inch.toFixed(1)}″</span>
+              <button onMouseDown={stop(() => stepT(0.5))} aria-label="Thicker">+</button>
+            </div>
+            <button className="wq-del" onMouseDown={stop(() => store.deleteSelected())} aria-label="Delete wall">✕</button>
           </div>
         );
       })()}
