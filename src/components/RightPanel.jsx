@@ -114,6 +114,15 @@ function SelectedProps() {
               </select>
             </div>
             <div className="field">
+              <label>This wall's face <span className="muted">(override)</span></label>
+              <select value={el.justify ?? ''} onChange={(e) => commitSet({ justify: e.target.value || undefined })}>
+                <option value="">Default ({wallJustify})</option>
+                <option value="interior">Interior face</option>
+                <option value="center">Centered</option>
+                <option value="exterior">Exterior face</option>
+              </select>
+            </div>
+            <div className="field">
               <label>Preset</label>
               <select value={match ? match.label : 'custom'} onChange={(e) => {
                 const p = WALL_PRESETS.find((x) => x.label === e.target.value);

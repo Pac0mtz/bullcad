@@ -751,7 +751,7 @@ export default function Canvas2D() {
                 // push the outer (exterior/centerline) row out so it clears the opening string
                 const extra = hasOpenings && k !== 'interior' ? ROW_GAP : 0;
                 return (
-                  <WallDimension key={'dw' + w.id + k} wall={w} kind={k} offset={base + extra} justify={wallJustify}
+                  <WallDimension key={'dw' + w.id + k} wall={w} kind={k} offset={base + extra} justify={w.justify || wallJustify}
                     centroid={wallCentroid} scale={scale} palette={t} color={t.wallDim} onPillDown={startOffsetDrag(w, 'wall', w.id, extra)} zoom={view.k} />
                 );
               });
@@ -760,7 +760,7 @@ export default function Canvas2D() {
             {walls.map((w) => (
               !w.noDim && (w.dimMode || dimMode) !== 'off' && openingsByWall[w.id]?.length
                 ? <WallOpeningDims key={'od' + w.id} wall={w} openings={openingsByWall[w.id]} perpOffset={w.openDimOff ?? dimOffset}
-                    centroid={wallCentroid} justify={wallJustify} scale={scale} palette={t} color={t.wallDim} onPillDown={startOffsetDrag(w, 'wall', w.id, 0, 'openDimOff')} zoom={view.k} />
+                    centroid={wallCentroid} justify={w.justify || wallJustify} scale={scale} palette={t} color={t.wallDim} onPillDown={startOffsetDrag(w, 'wall', w.id, 0, 'openDimOff')} zoom={view.k} />
                 : null
             ))}
             {/* fence dimensions — overall length + gate splits, like walls */}

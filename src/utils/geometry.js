@@ -250,12 +250,15 @@ function lineIntersect(p1, d1, p2, d2) {
 // original endpoints but still report the join flags.
 export function justifiedSegments(segs, justify, centroid, thicknessOf) {
   const out = new Map();
-  const centered = !justify || justify === 'center';
+  // each segment may carry its own `justify` (per-wall override); else the global
+  const jOf = (s) => s.justify || justify || 'center';
+  const isCentered = (s) => { const j = jOf(s); return !j || j === 'center'; };
+  const byId = new Map(segs.map((s) => [s.id, s]));
   const key = (p) => `${Math.round(p.x * 1000)},${Math.round(p.y * 1000)}`;
   const nodes = new Map(); // node key -> [{ id, end }]
   const lines = new Map(); // id -> { d } (unit direction of drawn line)
   for (const s of segs) {
-    const off = centered ? { x: 0, y: 0 } : justifyOffsetVec(s.a, s.b, thicknessOf(s), justify, centroid);
+    const off = isCentered(s) ? { x: 0, y: 0 } : justifyOffsetVec(s.a, s.b, thicknessOf(s), jOf(s), centroid);
     const a = { x: s.a.x + off.x, y: s.a.y + off.y };
     const b = { x: s.b.x + off.x, y: s.b.y + off.y };
     const L = dist(s.a, s.b) || 1;
@@ -271,11 +274,10 @@ export function justifiedSegments(segs, justify, centroid, thicknessOf) {
     if (members.length !== 2) continue; // free end or junction → leave plain
     const [m1, m2] = members;
     const r1 = out.get(m1.id), r2 = out.get(m2.id);
-    if (!centered) {
+    // miter when at least one side is offset (two centered ends already coincide)
+    if (!isCentered(byId.get(m1.id)) || !isCentered(byId.get(m2.id))) {
       const ix = lineIntersect(r1[m1.end], lines.get(m1.id).d, r2[m2.end], lines.get(m2.id).d);
-      if (!ix) continue; // collinear → already aligned, leave plain
-      r1[m1.end] = ix;
-      r2[m2.end] = ix;
+      if (ix) { r1[m1.end] = ix; r2[m2.end] = ix; }
     }
     r1[m1.end + 'Joined'] = true;
     r2[m2.end + 'Joined'] = true;
@@ -302,7 +304,7 @@ export function justifiedSegments(segs, justify, centroid, thicknessOf) {
       // overshoots (interior approach) or undershoots (exterior approach) — instead
       // intersect the abutting line with each band face and stop at the far one.
       const dAbut = lines.get(s.id).d, dT = lines.get(through.id).d, thT = thicknessOf(through);
-      const offT = centered ? { x: 0, y: 0 } : justifyOffsetVec(through.a, through.b, thT, justify, centroid);
+      const offT = isCentered(through) ? { x: 0, y: 0 } : justifyOffsetVec(through.a, through.b, thT, jOf(through), centroid);
       const cT = { x: through.a.x + offT.x, y: through.a.y + offT.y };
       const nT = { x: -dT.y, y: dT.x };
       let best = null, bestProj = -Infinity;
