@@ -47,7 +47,7 @@ function ElevationButton({ type, id }) {
   const closeElevation = useStore((s) => s.closeElevation);
   const active = elevationTarget?.id === id;
   return (
-    <button className="btn ghost" style={{ width: '100%', marginBottom: 12, background: active ? 'var(--lib-active-bg)' : 'var(--slate-bg)', color: 'var(--navy)' }}
+    <button className="btn soft" style={{ width: '100%', marginBottom: 12, background: active ? 'var(--lib-active-bg)' : undefined }}
       onClick={() => (active ? closeElevation() : openElevation(type, id))}>
       {active ? 'Exit elevation' : '▦ Edit elevation'}
     </button>
@@ -162,9 +162,9 @@ function SelectedProps() {
               Exterior wall <span className="muted">(splits the takeoff)</span>
             </label>
             <div className="row2">
-              <button className="btn ghost" style={{ width: '100%', background: 'var(--slate-bg)', color: 'var(--navy)' }}
+              <button className="btn soft" style={{ width: '100%' }}
                 onClick={() => splitWall(el.id)} title="Split this wall into two at its midpoint">⊟ Split</button>
-              <button className="btn ghost" style={{ width: '100%', background: 'var(--slate-bg)', color: 'var(--navy)' }}
+              <button className="btn soft" style={{ width: '100%' }}
                 onClick={() => applyWallStyleToAll(el.id)} title="Apply this wall's thickness, height, color and material to every wall">≡ Match all</button>
             </div>
             <p className="empty-note" style={{ marginTop: 8 }}>Drag the round corner handle to move joined walls together; the amber ◆ splits off just this wall (or hold Alt).</p>
@@ -191,7 +191,7 @@ function SelectedProps() {
                     value={+(el.dimOff ?? dimOffsetDefault).toFixed(2)} onChange={(v) => commitSet({ dimOff: v })} />
                   <div className="field" style={{ justifyContent: 'flex-end' }}>
                     <label>&nbsp;</label>
-                    <button className="btn ghost" style={{ width: '100%', background: 'var(--slate-bg)', color: 'var(--navy)' }}
+                    <button className="btn soft" style={{ width: '100%' }}
                       onClick={() => commitSet({ dimOff: undefined, openDimOff: undefined, dimMode: undefined })} title="Use the global dimension defaults">Reset</button>
                   </div>
                 </div>
@@ -446,7 +446,7 @@ function SelectedProps() {
             <input type="range" min="0" max="360" step="5" value={el.rotation || 0} style={{ width: '100%' }}
               onChange={(e) => set({ rotation: parseInt(e.target.value) })} onMouseUp={(e) => commitSet({ rotation: parseInt(e.target.value) })} />
           </div>
-          <button className="btn ghost" style={{ width: '100%', marginBottom: 12, background: 'var(--slate-bg)', color: 'var(--navy)' }}
+          <button className="btn soft" style={{ width: '100%', marginBottom: 12 }}
             onClick={() => commitSet({ rotation: ((el.rotation || 0) + 90) % 360 })}>Rotate 90°</button>
         </>
       )}
@@ -558,7 +558,7 @@ function Quantities() {
       </table>
 
       <div className="row2" style={{ marginTop: 14 }}>
-        <button className="btn ghost" style={{ background: 'var(--slate-bg)', color: 'var(--navy)' }} onClick={copyTable}>
+        <button className="btn soft" onClick={copyTable}>
           {copied === 'table' ? '✓ Copied' : 'Copy table'}
         </button>
         <button className="btn" onClick={copyJSON}>

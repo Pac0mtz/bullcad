@@ -158,7 +158,7 @@ export default function Scene3D() {
         />
       </Canvas>
 
-      <div className="hint">Click a wall, window, door, fence, or gate to edit it · Orbit: drag · Pan: right-drag · Zoom: scroll</div>
+      <div className="hint">Click any element to edit · drag to orbit · right-drag to pan · scroll to zoom</div>
     </div>
   );
 }

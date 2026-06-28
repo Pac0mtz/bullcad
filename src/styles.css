@@ -158,8 +158,22 @@ body {
 .btn.ghost { background: rgba(255,255,255,0.08); }
 .btn.ghost:hover { background: rgba(255,255,255,0.16); }
 .btn.danger { background: var(--danger); }
+.btn.danger:hover { background: #dc2626; }
+/* theme-aware secondary button (panel "Copy table", "Match all", "Reset"…) —
+   the old inline navy-on-slate was invisible in dark mode */
+.btn.soft { background: var(--slate-100); color: var(--text); }
+.btn.soft:hover { background: var(--slate-200); }
 .btn svg { width: 18px; height: 18px; flex: none; }
 .btn.icon-only { width: 36px; padding: 0; justify-content: center; }
+
+/* visible keyboard focus on every control (accessibility) */
+button:focus-visible,
+.lib-item:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
 
 .mode-toggle {
   display: flex;
@@ -367,17 +381,17 @@ body {
   top: 14px;
   left: 50%;
   transform: translateX(-50%);
-  max-width: 440px;
+  max-width: min(48%, 340px);
+  text-align: center;
   background: rgba(10,37,64,0.92);
   color: #fff;
   font-size: 12.5px;
   font-weight: 500;
-  padding: 8px 16px;
-  border-radius: 999px;
+  padding: 7px 15px;
+  border-radius: 12px;
   box-shadow: var(--shadow-lg);
   z-index: 8;
   pointer-events: none;
-  white-space: nowrap;
 }
 
 .float-controls {
