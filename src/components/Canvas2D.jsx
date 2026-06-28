@@ -36,6 +36,7 @@ export default function Canvas2D() {
   const [measure, setMeasure] = useState([]); // feet pts
   const [guides, setGuides] = useState([]); // alignment guide lines (feet) while dragging
   const [marquee, setMarquee] = useState(null); // {x0,y0,x1,y1} feet — rubber-band box (zoom or select)
+  const [mDraw, setMDraw] = useState(null); // mobile guided wall draw: { phase:'idle'|'placing', anchor, pointer, start }
   const drag = useRef(null); // active handle drag
   const runPath = useRef([]); // points clicked in the current wall run (for the room-area label)
   const marq = useRef(null);  // active marquee drag
@@ -139,6 +140,36 @@ export default function Canvas2D() {
     cx /= (6 * area); cy /= (6 * area);
     store.addRoomLabel({ x: cx, y: cy }, `${Math.abs(area).toFixed(1)} ft²`);
   };
+
+  // ---- mobile guided wall draw: drag a target, Begin Wall, then drag a pointer and
+  // Continue/End each segment (touch-friendly alternative to tap-to-place) ----
+  useEffect(() => {
+    if (coarse && (tool === 'wall' || tool === 'fence')) {
+      const cx = (size.w / 2 - view.x) / (scale * view.k), cy = (size.h / 2 - view.y) / (scale * view.k);
+      const p = snapEnabled ? snapPt({ x: cx, y: cy }, minorStep) : { x: cx, y: cy };
+      setMDraw({ phase: 'idle', anchor: null, pointer: p, start: null });
+      runPath.current = [];
+    } else {
+      setMDraw(null);
+    }
+  }, [coarse, tool]); // eslint-disable-line react-hooks/exhaustive-deps
+  const mBegin = () => setMDraw((m) => ({ ...m, phase: 'placing', anchor: m.pointer, start: m.pointer }));
+  const mAddSeg = (cont) => setMDraw((m) => {
+    if (!m.anchor) return m;
+    const end = m.pointer;
+    if (dist(m.anchor, end) > 0.1) {
+      tool === 'wall' ? store.addWall(m.anchor, end) : store.addFence(m.anchor, end);
+      if (!runPath.current.length) runPath.current.push(m.start);
+      runPath.current.push(end);
+    }
+    const closed = m.start && dist(end, m.start) < 0.35;
+    if (!cont || closed) {
+      if (closed && tool === 'wall') addRoomAreaLabel(runPath.current);
+      runPath.current = [];
+      return { phase: 'idle', anchor: null, pointer: end, start: null };
+    }
+    return { ...m, anchor: end, pointer: end };
+  });
 
   // focus the length-entry box as soon as a wall/fence run is started
   useEffect(() => {
@@ -303,6 +334,7 @@ export default function Canvas2D() {
     if (!raw) return;
 
     if (tool === 'wall' || tool === 'fence') {
+      if (mDraw) return; // mobile guided draw owns the gesture (use the Begin/Continue buttons)
       const pt = drawPt(raw);
       const clean = { x: pt.x, y: pt.y };
       if (!draft) { setDraft(clean); setRunStart(clean); runPath.current = [clean]; return; } // begin a run
@@ -920,6 +952,32 @@ export default function Canvas2D() {
               fill={zoom ? 'rgba(245,158,11,0.08)' : 'rgba(37,99,235,0.08)'} listening={false} />;
           })()}
 
+          {/* mobile guided draw: rubber band + draggable position pointer */}
+          {mDraw && (
+            <>
+              {mDraw.phase === 'placing' && mDraw.anchor && (
+                <Line points={[mDraw.anchor.x * scale, mDraw.anchor.y * scale, mDraw.pointer.x * scale, mDraw.pointer.y * scale]}
+                  stroke={tool === 'wall' ? BLUE : TEAL} strokeWidth={2.5 / view.k} dash={[7 / view.k, 5 / view.k]} listening={false} />
+              )}
+              {mDraw.phase === 'placing' && mDraw.anchor && (
+                <Group x={mDraw.anchor.x * scale} y={mDraw.anchor.y * scale} scaleX={1 / view.k} scaleY={1 / view.k} listening={false}>
+                  <Circle radius={6} fill={BLUE} stroke="#fff" strokeWidth={2} />
+                </Group>
+              )}
+              <Group x={mDraw.pointer.x * scale} y={mDraw.pointer.y * scale} draggable
+                onDragStart={(e) => { e.cancelBubble = true; }}
+                onDragMove={(e) => { e.cancelBubble = true; const p = drawPt({ x: e.target.x() / scale, y: e.target.y() / scale }); setMDraw((m) => m && { ...m, pointer: { x: p.x, y: p.y } }); }}>
+                <Group scaleX={1 / view.k} scaleY={1 / view.k}>
+                  <Circle radius={26} stroke={BLUE} strokeWidth={2} opacity={0.5} />
+                  {[[0, -26, 0, -12], [0, 26, 0, 12], [-26, 0, -12, 0], [26, 0, 12, 0]].map((p, i) => (
+                    <Line key={i} points={p} stroke={BLUE} strokeWidth={2.5} lineCap="round" />
+                  ))}
+                  <Circle radius={9} fill={BLUE} stroke="#fff" strokeWidth={2.5} />
+                </Group>
+              </Group>
+            </>
+          )}
+
           {/* room area labels */}
           {rooms.map((rm, i) => {
             const txt = `${Math.round(rm.area)} sq ft`;
@@ -1086,7 +1144,7 @@ export default function Canvas2D() {
       {/* wall/fence drawing toolbar — live thickness + Exit Drawing (magicplan-style) */}
       {(tool === 'wall' || tool === 'fence') && (
         <div className="draw-toolbar">
-          <span className="dt-hint">{draft ? `Drawing ${tool} — ${coarse ? 'tap' : 'click'} each corner` : `${coarse ? 'Tap' : 'Click'} to start the ${tool}`}</span>
+          {!mDraw && <span className="dt-hint">{draft ? `Drawing ${tool} — click each corner` : `Click to start the ${tool}`}</span>}
           {tool === 'wall' && (() => {
             const inch = store.wallThickness * 12;
             const step = (d) => store.setDefault('wallThickness', Math.max(1, Math.min(24, inch + d)) / 12);
@@ -1104,10 +1162,33 @@ export default function Canvas2D() {
       )}
 
       {/* touch coach — once a run is anchored, explain how to continue/finish */}
-      {coarse && draft && (tool === 'wall' || tool === 'fence') && (
+      {coarse && !mDraw && draft && (tool === 'wall' || tool === 'fence') && (
         <div className="draw-coach">
           <strong>{tool === 'wall' ? 'Wall' : 'Fence'} started</strong>
           Tap the next corner to extend · drag the plan to pan · double-tap to finish
+        </div>
+      )}
+
+      {/* mobile guided-draw modal */}
+      {mDraw && (
+        <div className="mdraw-modal">
+          {mDraw.phase === 'idle' ? (
+            <>
+              <div className="md-title">Drag the target to where the {tool} starts</div>
+              <div className="md-row">
+                <button className="md-primary" onClick={mBegin}>Begin {tool === 'wall' ? 'Wall' : 'Fence'}</button>
+                <button className="md-ghost" onMouseDown={(e) => { e.preventDefault(); finishRun(true); }}>Cancel</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="md-title">Drag the pointer to the {tool} end · <b>{formatFeetInches(dist(mDraw.anchor, mDraw.pointer))}</b></div>
+              <div className="md-row">
+                <button className="md-primary" onClick={() => mAddSeg(true)}>Continue {tool}</button>
+                <button className="md-ghost" onClick={() => mAddSeg(false)}>End {tool}</button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
