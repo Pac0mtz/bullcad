@@ -239,15 +239,21 @@ export function buildPlanSvg(model, opts = {}) {
   });
 
   // room labels: name above the interior-face area, plain black text (no pill /
-  // border / background), matching the on-screen plan
+  // border / background) like the on-screen plan. A white halo (text outline,
+  // not a box) keeps it readable where it crosses dimension lines in tight rooms.
   const roomNames = model.roomNames || {};
+  const roomLabel = (x, y, text, fs, bold) => {
+    const attrs = `x="${r2(x)}" y="${r2(y)}" font-size="${fs}" font-family="Helvetica, Arial, sans-serif" font-weight="${bold ? 'bold' : '600'}" text-anchor="middle"`;
+    return `<text ${attrs} fill="none" stroke="#ffffff" stroke-width="${r2(fs * 0.32)}" stroke-linejoin="round">${text}</text>`
+      + `<text ${attrs} fill="#0f172a">${text}</text>`;
+  };
   detectRooms(walls).forEach((rm) => {
     const name = roomNames[roomSignature(roomWalls(rm, walls))] || '';
     const showArea = opts.showRoomAreas !== false;
     if (!name && !showArea) return;
     const cx = rm.centroid.x, cy = rm.centroid.y;
-    if (name) el.push(`<text x="${r2(cx)}" y="${r2(cy - (showArea ? 0.3 : -0.1))}" font-size="0.62" fill="#0f172a" font-family="Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle">${escXml(name)}</text>`);
-    if (showArea) el.push(`<text x="${r2(cx)}" y="${r2(cy + (name ? 0.62 : 0.18))}" font-size="0.5" fill="#0f172a" font-family="Helvetica, Arial, sans-serif" font-weight="600" text-anchor="middle">${Math.round(rm.area)} sq ft</text>`);
+    if (name) el.push(roomLabel(cx, cy - (showArea ? 0.3 : -0.1), escXml(name), 0.62, true));
+    if (showArea) el.push(roomLabel(cx, cy + (name ? 0.62 : 0.18), `${Math.round(rm.area)} sq ft`, 0.5, false));
   });
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${r2(minX)} ${r2(minY)} ${r2(wFt)} ${r2(hFt)}" width="${r2(wFt)}" height="${r2(hFt)}">${el.join('')}</svg>`;
