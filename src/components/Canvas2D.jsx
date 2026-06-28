@@ -712,47 +712,63 @@ export default function Canvas2D() {
 
           {/* always-visible gray corner grips on every wall + fence corner
               (the selected element's corners get blue handles on top, below) */}
-          <Group listening={false}>
-            {cornerDots.map((p, i) => (
-              <Group key={'cd' + i} x={p.x * scale} y={p.y * scale} scaleX={1 / view.k} scaleY={1 / view.k}>
-                <Circle radius={coarse ? 6 : 4.5} fill="#94a3b8" stroke="#fff" strokeWidth={1} />
+          {(() => {
+            // grips scale with the wall body (≈ wall width) so they read as corner
+            // grips at any zoom, clamped so they stay usable when zoomed way out/in
+            const gripR = Math.max(coarse ? 4.5 : 3.5, Math.min(0.45 * 0.375 * scale * view.k, coarse ? 26 : 22));
+            return (
+              <Group listening={false}>
+                {cornerDots.map((p, i) => (
+                  <Group key={'cd' + i} x={p.x * scale} y={p.y * scale} scaleX={1 / view.k} scaleY={1 / view.k}>
+                    <Circle radius={gripR} fill="#94a3b8" stroke="#fff" strokeWidth={Math.max(1, gripR * 0.12)} />
+                  </Group>
+                ))}
               </Group>
-            ))}
-          </Group>
+            );
+          })()}
 
           {/* selected wall/fence endpoint handles — round blue = move the whole
               joined corner; amber diamond (only at shared corners, pulled into
               the segment) = split off and move just this segment */}
-          {[[selWall, walls, 'wallEnd'], [selFence, fences, 'fenceEnd']].map(([segEl, list, kind]) => segEl && (
-            <React.Fragment key={kind}>
-              {['a', 'b'].map((end) => (
-                <Group key={end} x={segEl[end].x * scale} y={segEl[end].y * scale} scaleX={1 / view.k} scaleY={1 / view.k}
-                  onMouseDown={startHandle({ kind, id: segEl.id, end, origin: { ...segEl[end] } })}
-                  onTouchStart={startHandle({ kind, id: segEl.id, end, origin: { ...segEl[end] } })}>
-                  <Circle radius={coarse ? 10 : 6} fill="#fff" stroke={BLUE} strokeWidth={2} hitStrokeWidth={coarse ? 22 : 10} />
-                </Group>
-              ))}
-              {['a', 'b'].map((end) => {
-                const pt = segEl[end];
-                const shared = list.some((e) => e.id !== segEl.id && (dist(e.a, pt) < 0.05 || dist(e.b, pt) < 0.05));
-                if (!shared) return null;
-                const other = end === 'a' ? 'b' : 'a';
-                const L = dist(pt, segEl[other]) || 1;
-                const D = (coarse ? 30 : 24) / view.k; // constant screen offset into the segment
-                const hx = pt.x * scale + (segEl[other].x - pt.x) / L * D;
-                const hy = pt.y * scale + (segEl[other].y - pt.y) / L * D;
-                const start = startHandle({ kind, id: segEl.id, end, origin: { ...pt }, solo: true });
-                const s = coarse ? 9 : 6.5;
-                const setCur = (c) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = c; };
-                return (
-                  <Group key={'sp' + end} x={hx} y={hy} scaleX={1 / view.k} scaleY={1 / view.k} onMouseDown={start} onTouchStart={start} onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
-                    <Line points={[0, -s, s, 0, 0, s, -s, 0]} closed fill="#fff" stroke="#f59e0b" strokeWidth={2} hitStrokeWidth={coarse ? 24 : 12} />
-                    <Line points={[-s * 0.4, 0, s * 0.4, 0]} stroke="#f59e0b" strokeWidth={1.5} listening={false} />
+          {[[selWall, walls, 'wallEnd'], [selFence, fences, 'fenceEnd']].map(([segEl, list, kind]) => segEl && (() => {
+            // size the move + split handles to the wall body so they scale with it,
+            // clamped so they're grabbable when zoomed out and not huge when zoomed in
+            const thick = kind === 'wallEnd' ? (segEl.thickness || 0.375) : FENCE_THICK;
+            const band = thick * scale * view.k; // wall width in screen px
+            const rr = Math.max(coarse ? 9 : 6, Math.min(band * 0.5, coarse ? 46 : 40));
+            const amberS = Math.max(coarse ? 8 : 6, Math.min(band * 0.42, coarse ? 36 : 30));
+            const offScreen = Math.max(coarse ? 34 : 26, band * 1.25); // the "break" sits ~1.25 wall-widths off the corner
+            return (
+              <React.Fragment key={kind}>
+                {['a', 'b'].map((end) => (
+                  <Group key={end} x={segEl[end].x * scale} y={segEl[end].y * scale} scaleX={1 / view.k} scaleY={1 / view.k}
+                    onMouseDown={startHandle({ kind, id: segEl.id, end, origin: { ...segEl[end] } })}
+                    onTouchStart={startHandle({ kind, id: segEl.id, end, origin: { ...segEl[end] } })}>
+                    <Circle radius={rr} fill="#fff" stroke={BLUE} strokeWidth={Math.max(2, rr * 0.14)} hitStrokeWidth={Math.max(coarse ? 22 : 10, rr)} />
                   </Group>
-                );
-              })}
-            </React.Fragment>
-          ))}
+                ))}
+                {['a', 'b'].map((end) => {
+                  const pt = segEl[end];
+                  const shared = list.some((e) => e.id !== segEl.id && (dist(e.a, pt) < 0.05 || dist(e.b, pt) < 0.05));
+                  if (!shared) return null;
+                  const other = end === 'a' ? 'b' : 'a';
+                  const L = dist(pt, segEl[other]) || 1;
+                  const D = offScreen / view.k; // screen-constant offset into the segment
+                  const hx = pt.x * scale + (segEl[other].x - pt.x) / L * D;
+                  const hy = pt.y * scale + (segEl[other].y - pt.y) / L * D;
+                  const start = startHandle({ kind, id: segEl.id, end, origin: { ...pt }, solo: true });
+                  const s = amberS;
+                  const setCur = (c) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = c; };
+                  return (
+                    <Group key={'sp' + end} x={hx} y={hy} scaleX={1 / view.k} scaleY={1 / view.k} onMouseDown={start} onTouchStart={start} onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
+                      <Line points={[0, -s, s, 0, 0, s, -s, 0]} closed fill="#fff" stroke="#f59e0b" strokeWidth={Math.max(2, s * 0.16)} hitStrokeWidth={Math.max(coarse ? 24 : 12, s)} />
+                      <Line points={[-s * 0.4, 0, s * 0.4, 0]} stroke="#f59e0b" strokeWidth={Math.max(1.5, s * 0.12)} listening={false} />
+                    </Group>
+                  );
+                })}
+              </React.Fragment>
+            );
+          })())}
 
           {/* width-resize handles on a selected door / window / opening or gate —
               drag a jamb to resize (center stays put; snaps to 1/4") */}
