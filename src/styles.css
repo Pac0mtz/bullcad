@@ -520,8 +520,9 @@ button:focus-visible,
 /* mobile guided wall-draw modal (bottom sheet) */
 .mdraw-modal {
   position: absolute;
-  left: 12px; right: 12px; bottom: 16px;
-  z-index: 46;
+  left: 12px; right: 12px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px)); /* clear the iOS home bar */
+  z-index: 48; /* above the Tools/Properties FABs while guiding a draw */
   background: rgba(10, 37, 64, 0.96); color: #fff;
   border-radius: 16px; padding: 14px 16px;
   box-shadow: var(--shadow-lg);
@@ -535,7 +536,7 @@ button:focus-visible,
 /* touch coach — sits low (above the bottom drawer toggles) once a run starts */
 .draw-coach {
   position: absolute;
-  bottom: 76px; left: 50%; transform: translateX(-50%);
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);
   z-index: 9;
   max-width: min(90vw, 360px); text-align: center;
   background: rgba(10, 37, 64, 0.92); color: #fff;
@@ -727,7 +728,7 @@ kbd {
     gap: 12px;
     position: fixed;
     right: 14px;
-    bottom: 18px;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
     z-index: 45;
   }
   .fab-btn {
@@ -752,12 +753,12 @@ kbd {
   .sr-pan { display: none; }
   .scale-readout {
     left: 50%; right: auto; transform: translateX(-50%);
-    bottom: 18px; font-size: 11px; padding: 6px 12px;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px)); font-size: 11px; padding: 6px 12px;
   }
-  .fence-legend { bottom: 140px; right: 12px; padding: 7px 9px; min-width: 0; opacity: 0.96; }
+  .fence-legend { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); right: 12px; padding: 7px 9px; min-width: 0; opacity: 0.96; }
   .fence-legend .fl-title { font-size: 8.5px; margin-bottom: 4px; }
   .fence-legend .fl-row { font-size: 11px; gap: 7px; padding: 1px 0; }
-  .compass-control { bottom: 14px; left: 10px; transform: scale(0.82); transform-origin: bottom left; }
+  .compass-control { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); left: 10px; transform: scale(0.82); transform-origin: bottom left; }
   .float-controls { top: 10px; right: 10px; }
 }
 
