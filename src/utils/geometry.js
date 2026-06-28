@@ -427,6 +427,7 @@ export function wallOpeningDimGeometry(wall, openings, perpOffset, centroid, jus
 
 // ----- Wall thickness presets (US framing / masonry), value in inches -----
 export const WALL_PRESETS = [
+  { label: 'Standard', inches: 6 },
   { label: 'Interior 2×4', inches: 4.5 },
   { label: 'Exterior 2×6', inches: 6.5 },
   { label: 'Exterior 2×8', inches: 8.5 },

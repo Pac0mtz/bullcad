@@ -11,7 +11,7 @@ const emptyGeom = () => Object.fromEntries(GEOM_KEYS.map((k) => [k, []]));
 // ----- a small sample plan so the app looks alive on first load -----
 function samplePlan() {
   // A 24' x 16' building footprint with a perimeter fence + gate.
-  const W = 24, H = 16, t = 0.375;
+  const W = 24, H = 16, t = 0.5; // 6" walls
   const corners = [
     { x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: H }, { x: 0, y: H },
   ];
@@ -93,7 +93,7 @@ export const useStore = create((set, get) => ({
   fenceJustify: 'center', // 'center' | 'interior' | 'exterior'
 
   // ----- defaults applied to newly drawn elements -----
-  wallThickness: 0.375, // 4.5"
+  wallThickness: 0.5, // 6"
   wallHeight: 8,
   wallColor: '#e2e8f0',
   wallMaterial: 'drywall',
