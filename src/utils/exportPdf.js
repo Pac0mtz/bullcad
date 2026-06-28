@@ -5,7 +5,7 @@
 import { jsPDF } from 'jspdf';
 import { svg2pdf } from 'svg2pdf.js';
 import {
-  dist, lerp, angleOf, centroidOf, wallDimGeometry, wallOpeningDimGeometry, justifiedSegments, WINDOW_STYLES, FENCE_TYPES, postsAlong,
+  dist, lerp, angleOf, centroidOf, wallDimGeometry, wallOpeningDimGeometry, justifiedSegments, wallPolygons, WINDOW_STYLES, FENCE_TYPES, postsAlong,
   formatFeetInches, windowBars, stairGeometry, detectRooms, roomWalls, roomSignature,
 } from './geometry.js';
 import { computeQuantities, fenceComponents } from './quantities.js';
@@ -18,7 +18,7 @@ const r2 = (n) => Math.round(n * 1000) / 1000;
 function dimPill(x, y, angle, text, fs) {
   // text only — no pill box/border. A white halo keeps the number readable
   // where it crosses the dimension line.
-  const attrs = `x="0" y="${r2(fs * 0.33)}" font-size="${fs}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="bold"`;
+  const attrs = `x="0" y="${r2(fs * 0.33)}" font-size="${fs}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="600"`;
   return `<g transform="translate(${r2(x)} ${r2(y)}) rotate(${r2(angle)})">`
     + `<text ${attrs} fill="none" stroke="#ffffff" stroke-width="${r2(fs * 0.32)}" stroke-linejoin="round">${text}</text>`
     + `<text ${attrs} fill="${NAVY}">${text}</text>`
@@ -63,7 +63,15 @@ export function buildPlanSvg(model, opts = {}) {
       el.push(`<rect x="${r2(p.x - 0.18)}" y="${r2(p.y - 0.18)}" width="0.36" height="0.36" fill="${NAVY}"/>`));
   });
 
+  // walls as mitered, filled polygons — the SAME source as the on-screen 2D
+  // plan, so corners join cleanly and the PDF matches the app exactly
+  const wallPolys = wallPolygons(walls, wj, centroid, (w) => w.thickness || 0.5);
   walls.forEach((w) => {
+    const poly = wallPolys.get(w.id);
+    if (poly && poly.points && poly.points.length >= 3) {
+      el.push(`<polygon points="${poly.points.map((p) => `${r2(p.x)},${r2(p.y)}`).join(' ')}" fill="${NAVY}" stroke="${NAVY}" stroke-width="0.02" stroke-linejoin="round"/>`);
+      return;
+    }
     const th = Math.max(0.15, w.thickness);
     const s = wSeg(w);
     el.push(`<line x1="${r2(s.a.x)}" y1="${r2(s.a.y)}" x2="${r2(s.b.x)}" y2="${r2(s.b.y)}" stroke="${NAVY}" stroke-width="${r2(th)}" stroke-linecap="square"/>`);
