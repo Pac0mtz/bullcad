@@ -355,7 +355,7 @@ function drawCompass(doc, cx, cy, r) {
   doc.triangle(cx, cy - r * 0.66, cx - r * 0.26, cy, cx + r * 0.26, cy, 'F');
   doc.setFillColor(148, 163, 184);
   doc.triangle(cx, cy + r * 0.66, cx - r * 0.26, cy, cx + r * 0.26, cy, 'F');
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(r * 0.7); doc.setTextColor(10, 37, 64);
+  doc.setFont('Poppins', 'bold'); doc.setFontSize(r * 0.7); doc.setTextColor(10, 37, 64);
   doc.text('N', cx, cy - r - 2, { align: 'center' });
 }
 
@@ -380,27 +380,35 @@ function drawLegend(doc, q, model, opts, x, y, w, h) {
   doc.roundedRect(x, y, w, h, 4, 4, 'S');
 
   // title block with a teal accent rule
-  doc.setTextColor(10, 37, 64); doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
+  doc.setTextColor(10, 37, 64); doc.setFont('Poppins', 'bold'); doc.setFontSize(15);
   doc.text(opts.title || 'PlanForge Plan', x + pad, cy); cy += 6;
   doc.setDrawColor(20, 184, 166); doc.setLineWidth(2); doc.line(x + pad, cy, x + pad + 34, cy); cy += 11;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(100, 116, 139);
+  doc.setFont('Poppins', 'normal'); doc.setFontSize(8.5); doc.setTextColor(100, 116, 139);
   doc.text(`Wall & Fence Layout  ·  ${new Date().toLocaleDateString()}`, x + pad, cy); cy += 16;
 
-  const section = (t) => { doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.text(t.toUpperCase(), x + pad, cy); cy += 4; doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.6); doc.line(x + pad, cy, right, cy); cy += 11; };
+  const section = (t) => { doc.setFont('Poppins', 'bold'); doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.text(t.toUpperCase(), x + pad, cy); cy += 4; doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.6); doc.line(x + pad, cy, right, cy); cy += 11; };
   const row = (label, val, sym, indent = 0) => {
-    doc.setTextColor(10, 37, 64); doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+    doc.setTextColor(10, 37, 64); doc.setFont('Poppins', 'normal'); doc.setFontSize(10);
     if (sym) { drawFenceSymbol(doc, sym.style, sym.color, x + pad, cy - 3, 20); doc.text(label, x + pad + 26, cy); }
     else doc.text(label, x + pad + indent, cy);
-    doc.setFont('helvetica', 'bold'); doc.text(String(val), right, cy, { align: 'right' });
+    doc.setFont('Poppins', 'bold'); doc.text(String(val), right, cy, { align: 'right' });
     doc.setDrawColor(232, 237, 243); doc.setLineWidth(0.4); doc.line(x + pad, cy + 4, right, cy + 4);
     cy += 15;
   };
-  // small grey note line (component breakdown), no rule
-  const note = (t) => { doc.setFont('helvetica', 'normal'); doc.setFontSize(7.6); doc.setTextColor(120, 132, 148); doc.text(t, x + pad + 26, cy); cy += 11; };
+  // small grey note line (component breakdown), no rule. Starts at the left
+  // margin (not indented under the symbol) and shrinks to fit so long breakdowns
+  // like "20 posts · 20 sections · 269 boards · 1 gate" never clip the edge.
+  const note = (t) => {
+    doc.setFont('Poppins', 'normal'); doc.setTextColor(120, 132, 148);
+    let fs = 7.6; doc.setFontSize(fs);
+    const maxW = w - pad * 2;
+    while (fs > 5.6 && doc.getTextWidth(t) > maxW) { fs -= 0.3; doc.setFontSize(fs); }
+    doc.text(t, x + pad, cy); cy += 11;
+  };
 
   section('Quantities');
   row('Wall linear ft', q.wallLF.toFixed(1));
-  if (q.wallExtLF > 0 || q.wallIntLF > 0) { doc.setFontSize(7.6); doc.setTextColor(120, 132, 148); doc.setFont('helvetica', 'normal'); doc.text(`exterior ${q.wallExtLF.toFixed(0)} ft  ·  interior ${q.wallIntLF.toFixed(0)} ft`, x + pad, cy); cy += 12; }
+  if (q.wallExtLF > 0 || q.wallIntLF > 0) { doc.setFontSize(7.6); doc.setTextColor(120, 132, 148); doc.setFont('Poppins', 'normal'); doc.text(`exterior ${q.wallExtLF.toFixed(0)} ft  ·  interior ${q.wallIntLF.toFixed(0)} ft`, x + pad, cy); cy += 12; }
   row('Doors / Windows', `${q.doorCount} / ${q.windowCount}`);
   if (q.openingCount) row('Openings', q.openingCount);
   cy += 4;
@@ -433,15 +441,15 @@ function drawLegend(doc, q, model, opts, x, y, w, h) {
     const marks = { door: 0, window: 0, opening: 0 };
     const pre = { door: 'D', window: 'W', opening: 'O' };
     const markX = x + pad + 20, sizeX = x + pad + 56; // leave room for the icon
-    doc.setFontSize(8); doc.setTextColor(120, 132, 148); doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8); doc.setTextColor(120, 132, 148); doc.setFont('Poppins', 'bold');
     doc.text('MARK', markX, cy); doc.text('SIZE', sizeX, cy); doc.text('QTY', right, cy, { align: 'right' });
     cy += 12;
     for (const g of list) {
       const mark = pre[g.type] + (++marks[g.type]);
       drawOpeningSymbol(doc, g.type, x + pad, cy - 1, 12); // mark icon
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(10, 37, 64);
+      doc.setFont('Poppins', 'bold'); doc.setFontSize(9.5); doc.setTextColor(10, 37, 64);
       doc.text(mark, markX, cy);
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('Poppins', 'normal');
       const size = `${formatFeetInches(g.w)} × ${formatFeetInches(g.ht)}`;
       doc.text(size, sizeX, cy);
       doc.text('×' + g.n, right, cy, { align: 'right' });
@@ -453,7 +461,7 @@ function drawLegend(doc, q, model, opts, x, y, w, h) {
   }
 
   cy = Math.max(cy + 6, y + h - 34);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120, 132, 148);
+  doc.setFont('Poppins', 'normal'); doc.setFontSize(8); doc.setTextColor(120, 132, 148);
   doc.text(`Units: ${opts.dimUnit === 'in' ? 'inches' : 'feet & inches'}  ·  Dimensions: ${opts.dimMode || 'exterior'}`, x + pad, cy); cy += 11;
   doc.text(`North is up. Drawing fit to page — read dimensions.`, x + pad, cy);
 }
@@ -659,7 +667,7 @@ async function drawElevationsPage(doc, elevations, model, opts, format, orientat
     const chunk = built.slice(p * PER_PAGE, p * PER_PAGE + PER_PAGE);
     doc.addPage(format, orientation);
     const PW = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight(), M = 28;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(10, 37, 64);
+    doc.setFont('Poppins', 'bold'); doc.setFontSize(16); doc.setTextColor(10, 37, 64);
     const heading = (opts.title || 'PlanForge Plan') + ' — Elevations' + (pages > 1 ? ` (${p + 1}/${pages})` : '');
     doc.text(heading, M, M + 12);
     doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.8); doc.line(M, M + 20, PW - M, M + 20);
@@ -682,9 +690,9 @@ async function drawElevationsPage(doc, elevations, model, opts, format, orientat
       document.body.appendChild(holder);
       try { await svg2pdf(holder.querySelector('svg'), doc, { x: ix, y: iy, width: dw, height: dh }); } finally { holder.remove(); }
       // caption: wall/fence title, then the facing orientation on the line below
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(10, 37, 64);
+      doc.setFont('Poppins', 'bold'); doc.setFontSize(10); doc.setTextColor(10, 37, 64);
       doc.text(v.label, x + cellW / 2, y + cellH - 12, { align: 'center' });
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(37, 99, 235);
+      doc.setFont('Poppins', 'bold'); doc.setFontSize(7.5); doc.setTextColor(37, 99, 235);
       doc.text('Faces ' + (FACING_NAMES[v.facing] || v.facing || ''), x + cellW / 2, y + cellH - 3, { align: 'center' });
     }
   }
@@ -699,7 +707,7 @@ function draw3DViewsPage(doc, views, title, format, orientation) {
   const PH = doc.internal.pageSize.getHeight();
   const M = 28;
 
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(10, 37, 64);
+  doc.setFont('Poppins', 'bold'); doc.setFontSize(16); doc.setTextColor(10, 37, 64);
   doc.text((title || 'PlanForge Plan') + ' — 3D Views', M, M + 12);
   doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.8);
   doc.line(M, M + 20, PW - M, M + 20);
@@ -723,7 +731,7 @@ function draw3DViewsPage(doc, views, title, format, orientation) {
     doc.addImage(v.dataUrl, 'PNG', ix, iy, iw, ih, undefined, 'FAST');
     doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.8);
     doc.rect(ix, iy, iw, ih);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(100, 116, 139);
+    doc.setFont('Poppins', 'normal'); doc.setFontSize(10); doc.setTextColor(100, 116, 139);
     doc.text(v.label, x + cellW / 2, y + cellH - 3, { align: 'center' });
   });
 }

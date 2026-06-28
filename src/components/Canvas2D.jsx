@@ -469,9 +469,9 @@ export default function Canvas2D() {
     drag.current = { ...payload, grab, moved: false, before: useStore.getState().snapshotGeom() };
   };
 
-  // click a room's floor: select the whole room (its bounding walls) and arm a
-  // group drag so dragging moves every wall of the room together
-  const startRoomDrag = (rm) => (e) => {
+  // drag the room MOVE handle: translate every wall of the room together. The
+  // room is already selected (the handle only shows when it is).
+  const startRoomMove = (rm) => (e) => {
     e.cancelBubble = true;
     if (tool !== 'select') return;
     store.selectRoom(rm.sig, rm.wallIds);
@@ -480,7 +480,7 @@ export default function Canvas2D() {
   };
 
   // drag a room's NAME/AREA label to reposition it (independent of the room).
-  // Selects the room too, so the grip handle shows while you drag.
+  // Selects the room too, so the move handle shows while you drag.
   const startRoomLabelDrag = (rm) => (e) => {
     e.cancelBubble = true;
     if (tool !== 'select') return;
@@ -826,15 +826,14 @@ export default function Canvas2D() {
           <Group listening={false}>{gridShape}</Group>
 
           {/* room floors: a solid fill inside every closed wall loop, drawn under
-              the walls so the wall poché trims it to the interior faces. Click to
-              select the whole room (its bounding walls); drag to move them all. */}
+              the walls so the wall poché trims it to the interior faces. NOT
+              listening — the floor never captures clicks (that confused with
+              walls); a room is selected by clicking its label, moved by its handle. */}
           {layers.walls && rooms.map((rm, i) => {
             const selRoom = selection?.type === 'room' && selection.id === rm.sig;
             return (
               <Line key={'floor' + i} points={rm.polygon.flatMap((p) => [p.x * scale, p.y * scale])}
-                closed fill={selRoom ? t.roomFillSel : t.roomFill}
-                listening={tool === 'select'}
-                onMouseDown={startRoomDrag(rm)} onTouchStart={startRoomDrag(rm)} />
+                closed fill={selRoom ? t.roomFillSel : t.roomFill} listening={false} />
             );
           })}
 
@@ -1076,10 +1075,10 @@ export default function Canvas2D() {
             </>
           )}
 
-          {/* room labels: the name (if set) sits above the interior area, as plain
-              black text — no pill/border/background. Tap-and-drag the label to
-              relocate it; a grip handle appears once the room is selected. The
-              area number obeys the Canvas "show room areas" toggle. */}
+          {/* room labels: click the name/area to SELECT the room (the floor never
+              grabs clicks, so it won't fight with wall selection); drag the label
+              to reposition it. When selected, a 4-way MOVE handle appears above —
+              drag it to move the whole room. */}
           {rooms.map((rm, i) => {
             const area = `${Math.round(rm.area)} sq ft`;
             if (!rm.name && !showRoomAreas) return null;
@@ -1089,26 +1088,31 @@ export default function Canvas2D() {
             const hitW = Math.max((rm.name || '').length * 8.5, area.length * 7, 30) + 14;
             const hitTop = (rm.name ? nameY : -8) - 3;
             const hitH = (rm.name && showRoomAreas) ? 42 : 24;
-            const gripY = hitTop - 5; // grip sits just above the text
-            const dots = []; for (const dy of [-2.2, 2.2]) for (const dx of [-4.4, 0, 4.4]) dots.push({ dx, dy });
+            const lx = rm.labelPos.x * scale, ly = rm.labelPos.y * scale;
+            const setCur = (c) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = c; };
+            const arrows = [[0, -6, 0, 6], [-6, 0, 6, 0], [0, -6, -2.2, -3.4], [0, -6, 2.2, -3.4], [0, 6, -2.2, 3.4], [0, 6, 2.2, 3.4], [-6, 0, -3.4, -2.2], [-6, 0, -3.4, 2.2], [6, 0, 3.4, -2.2], [6, 0, 3.4, 2.2]];
             return (
-              <Group key={'room' + i} x={rm.labelPos.x * scale} y={rm.labelPos.y * scale} scaleX={1 / view.k} scaleY={1 / view.k}
-                listening={tool === 'select'} onMouseDown={startRoomLabelDrag(rm)} onTouchStart={startRoomLabelDrag(rm)}>
-                {/* invisible hit area so the whole label is grab-able to drag */}
-                <Rect x={-hitW / 2} y={hitTop} width={hitW} height={hitH} fill="rgba(0,0,0,0.001)" />
+              <React.Fragment key={'room' + i}>
+                <Group x={lx} y={ly} scaleX={1 / view.k} scaleY={1 / view.k}
+                  listening={tool === 'select'} onMouseDown={startRoomLabelDrag(rm)} onTouchStart={startRoomLabelDrag(rm)}
+                  onMouseEnter={setCur('pointer')} onMouseLeave={setCur('')}>
+                  <Rect x={-hitW / 2} y={hitTop} width={hitW} height={hitH} fill="rgba(0,0,0,0.001)" />
+                  {rm.name && (
+                    <Text x={-W / 2} y={nameY} width={W} align="center" text={rm.name} fontSize={14} fontFamily="Poppins" fontStyle="600" fill={t.roomText} listening={false} />
+                  )}
+                  {showRoomAreas && (
+                    <Text x={-W / 2} y={rm.name ? 2 : -7} width={W} align="center" text={area} fontSize={12} fontFamily="Poppins" fontStyle="400" fill={t.roomText} listening={false} />
+                  )}
+                </Group>
                 {selRoom && (
-                  <Group y={gripY}>
-                    <Rect x={-11} y={-6.5} width={22} height={13} cornerRadius={6.5} fill={BLUE} />
-                    {dots.map((d, k) => <Circle key={k} x={d.dx} y={d.dy} radius={1.1} fill="#fff" listening={false} />)}
+                  <Group x={lx} y={ly + (hitTop - 13)} scaleX={1 / view.k} scaleY={1 / view.k}
+                    onMouseDown={startRoomMove(rm)} onTouchStart={startRoomMove(rm)}
+                    onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
+                    <Circle radius={10} fill={BLUE} stroke="#fff" strokeWidth={1.5} hitStrokeWidth={coarse ? 16 : 8} />
+                    {arrows.map((p, k) => <Line key={k} points={p} stroke="#fff" strokeWidth={1.4} lineCap="round" listening={false} />)}
                   </Group>
                 )}
-                {rm.name && (
-                  <Text x={-W / 2} y={nameY} width={W} align="center" text={rm.name} fontSize={14} fontFamily="Poppins" fontStyle="600" fill={t.roomText} listening={false} />
-                )}
-                {showRoomAreas && (
-                  <Text x={-W / 2} y={rm.name ? 2 : -7} width={W} align="center" text={area} fontSize={12} fontFamily="Poppins" fontStyle="400" fill={t.roomText} listening={false} />
-                )}
-              </Group>
+              </React.Fragment>
             );
           })}
 
