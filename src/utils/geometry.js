@@ -680,10 +680,55 @@ export function detectRooms(walls) {
       // Net floor area = inside the wall FACES, not the centerline loop: push each
       // edge inward by half the bounding wall's thickness and measure that polygon.
       const interior = insetPolygon(poly, walls);
-      rooms.push({ polygon: poly, area: Math.abs(interior.area) || A, centroid: { x: cx / (6 * A), y: cy / (6 * A) } });
+      rooms.push({ polygon: poly, area: Math.abs(interior.area) || A, gross: Math.abs(A), holes: [], centroid: { x: cx / (6 * A), y: cy / (6 * A) } });
+    }
+
+    // ---- nested rooms (a room placed inside another) ----
+    // A room whose centroid sits inside a bigger room is a HOLE in that room:
+    // carve it out of the bigger room's fill, subtract its area, and move the
+    // bigger room's label off it — so the inner stays white and both stay
+    // selectable (their labels no longer stack on the shared centre).
+    const inPoly = (pt, poly) => {
+      let c = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const a = poly[i], b = poly[j];
+        if (((a.y > pt.y) !== (b.y > pt.y)) && (pt.x < (b.x - a.x) * (pt.y - a.y) / ((b.y - a.y) || 1e-9) + a.x)) c = !c;
+      }
+      return c;
+    };
+    for (const r of rooms) for (const o of rooms) {
+      if (o === r || o.gross >= r.gross || !inPoly(o.centroid, r.polygon)) continue;
+      // only DIRECT containment: no intermediate room between r and o
+      const nested = rooms.some((m) => m !== r && m !== o && m.gross < r.gross && m.gross > o.gross && inPoly(o.centroid, m.polygon) && inPoly(m.centroid, r.polygon));
+      if (!nested) r.holes.push(o);
+    }
+    for (const r of rooms) {
+      if (!r.holes.length) continue;
+      r.area = Math.max(0, r.area - r.holes.reduce((s, h) => s + h.gross, 0)); // net floor (ring)
+      r.centroid = ringLabelPoint(r.polygon, r.holes.map((h) => h.polygon)) || r.centroid;
+      r.holes = r.holes.map((h) => h.polygon); // keep just the geometry for the fill
     }
     return rooms;
   } catch { return []; }
+}
+
+// A label point inside `poly` but OUTSIDE every hole — the spot in the ring with
+// the most clearance, so a doughnut-shaped room's label doesn't land on the
+// inner room. Coarse grid sample maximizing distance to the nearest edge.
+function ringLabelPoint(poly, holes) {
+  const xs = poly.map((p) => p.x), ys = poly.map((p) => p.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const inPoly = (pt, pg) => { let c = false; for (let i = 0, j = pg.length - 1; i < pg.length; j = i++) { const a = pg[i], b = pg[j]; if (((a.y > pt.y) !== (b.y > pt.y)) && (pt.x < (b.x - a.x) * (pt.y - a.y) / ((b.y - a.y) || 1e-9) + a.x)) c = !c; } return c; };
+  const edgeDist = (pt, pg) => { let d = Infinity; for (let i = 0; i < pg.length; i++) d = Math.min(d, projectOnSegment(pt, pg[i], pg[(i + 1) % pg.length]).distance); return d; };
+  let best = null, bestD = -1, N = 18;
+  for (let i = 1; i < N; i++) for (let j = 1; j < N; j++) {
+    const pt = { x: minX + (maxX - minX) * i / N, y: minY + (maxY - minY) * j / N };
+    if (!inPoly(pt, poly) || holes.some((h) => inPoly(pt, h))) continue;
+    let d = edgeDist(pt, poly);
+    for (const h of holes) d = Math.min(d, edgeDist(pt, h));
+    if (d > bestD) { bestD = d; best = pt; }
+  }
+  return best;
 }
 
 // Wall ids whose segments run along a detected room's polygon edges — the walls

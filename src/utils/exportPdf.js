@@ -63,7 +63,7 @@ export function buildPlanSvg(model, opts = {}) {
   // strikes through the number
   const dimLineSVG = (p0, p1, text, fs) => {
     const dx = p1.x - p0.x, dy = p1.y - p0.y, len = Math.hypot(dx, dy) || 1;
-    const half = (text.length * fs * 0.6 + fs * 0.7) / 2; // label half-width (feet)
+    const half = (text.length * fs * 0.66 + fs * 0.9) / 2; // label half-width (feet, Poppins)
     // text fills the whole line → draw NO center line (the end ticks + number
     // convey it); otherwise two stubs with a gap so the line never crosses text
     if (len / 2 - half <= 0.05) return '';

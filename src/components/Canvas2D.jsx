@@ -36,6 +36,7 @@ export default function Canvas2D() {
 
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [view, setView] = useState({ x: 120, y: 90, k: 1 });
+  const [hoverId, setHoverId] = useState(null); // wall/fence under the cursor (Select tool) → hover highlight
   // Konva paints text to a canvas, so a webfont that loads after first render
   // would show the fallback until something redraws — force one redraw once
   // Poppins is ready so dimension/room labels switch to it immediately.
@@ -831,15 +832,23 @@ export default function Canvas2D() {
               walls); a room is selected by clicking its label, moved by its handle. */}
           {layers.walls && rooms.map((rm, i) => {
             const selRoom = selection?.type === 'room' && selection.id === rm.sig;
+            const fill = selRoom ? t.roomFillSel : t.roomFill;
             return (
-              <Line key={'floor' + i} points={rm.polygon.flatMap((p) => [p.x * scale, p.y * scale])}
-                closed fill={selRoom ? t.roomFillSel : t.roomFill} listening={false} />
+              <Shape key={'floor' + i} listening={false} perfectDrawEnabled={false} sceneFunc={(ctx) => {
+                const ring = (pts) => { pts.forEach((p, k) => (k ? ctx.lineTo(p.x * scale, p.y * scale) : ctx.moveTo(p.x * scale, p.y * scale))); ctx.closePath(); };
+                ctx.beginPath();
+                ring(rm.polygon);
+                (rm.holes || []).forEach(ring); // nested rooms are carved out (even-odd)
+                ctx.fillStyle = fill;
+                ctx.fill('evenodd');
+              }} />
             );
           })}
 
           {/* fences (under walls) */}
           {layers.fences && fences.map((f) => (
             <FenceShape key={f.id} fence={f} scale={scale} palette={t} seg={fenceSegs.get(f.id)} gates={gatesByFence[f.id] || []} selected={selection?.id === f.id || multiSet.has(f.id)}
+              hovered={hoverId === f.id} onHover={tool === 'select' ? setHoverId : undefined}
               onSelect={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'fence', id: f.id }); startHandle({ kind: 'fenceMove', id: f.id })(e); } }} />
           ))}
           {/* gates */}
@@ -869,6 +878,7 @@ export default function Canvas2D() {
           {/* walls */}
           {layers.walls && walls.map((w) => (
             <WallShape key={w.id} wall={w} scale={scale} palette={t} seg={wallSegs.get(w.id)} poly={wallPolys.get(w.id)} selected={selection?.id === w.id || multiSet.has(w.id)}
+              hovered={hoverId === w.id} onHover={tool === 'select' ? setHoverId : undefined}
               onSelect={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'wall', id: w.id }); startHandle({ kind: 'wallMove', id: w.id })(e); } }} />
           ))}
           {/* openings */}

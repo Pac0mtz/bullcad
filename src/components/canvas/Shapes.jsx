@@ -71,7 +71,7 @@ export function DimLabel({ a, b, scale, color = NAVY, off = 0.9, palette = DEFAU
   const cx = (mid.x + nx * off) * scale;
   const cy = (mid.y + ny * off) * scale;
   const txt = formatFeetInches(L);
-  const w = txt.length * 5.4 + 7;
+  const w = txt.length * 6.2 + 9;
   const inv = dimScale(zoom);
   let angle = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
   if (angle > 90 || angle < -90) angle += 180; // keep text upright
@@ -89,9 +89,9 @@ export function WallDimension({ wall, kind, offset, centroid, justify = 'center'
   if (!g) return null;
   const S = scale;
   const P = (p) => [p.x * S, p.y * S];
-  const w = g.label.text.length * 5.4 + 7;
+  const w = g.label.text.length * 6.2 + 9; // Poppins runs wider than the old font
   const inv = dimScale(zoom);
-  const gapFt = ((w / 2 + 5) * inv) / S; // gap so the line clears the number
+  const gapFt = ((w / 2 + 6) * inv) / S; // gap so the line clears the number
   const segs = brokenLine(g.line[0], g.line[1], g.label, gapFt);
   const setCur = (c) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = c; };
   return (
@@ -130,9 +130,9 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
         <Line key={'w' + i} points={[...P(s[0]), ...P(s[1])]} stroke={color} strokeWidth={0.5} opacity={0.5} strokeScaleEnabled={false} listening={false} />
       ))}
       {g.segments.map((seg, i) => {
-        const lw = seg.label.text.length * 5 + 6;
+        const lw = seg.label.text.length * 5.8 + 8;
         const mid = { x: (seg.line[0].x + seg.line[1].x) / 2, y: (seg.line[0].y + seg.line[1].y) / 2 };
-        const segs = brokenLine(seg.line[0], seg.line[1], mid, ((lw / 2 + 4) * inv) / S);
+        const segs = brokenLine(seg.line[0], seg.line[1], mid, ((lw / 2 + 5) * inv) / S);
         return segs.map((s, j) => <Line key={'l' + i + '_' + j} points={[...P(s.a), ...P(s.b)]} stroke={color} strokeWidth={0.6} strokeScaleEnabled={false} listening={false} />);
       })}
       {g.ticks.map((s, i) => (
@@ -156,15 +156,22 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
 // ---------------- WALL ----------------
 // Architectural poché: the wall is a single solid band the width of its real
 // thickness (no centerline / no light border). Square caps fill shared corners.
-export function WallShape({ wall, scale, selected, onSelect, palette = DEFAULT_PALETTE, seg = null, poly = null }) {
+export function WallShape({ wall, scale, selected, hovered, onSelect, onHover, palette = DEFAULT_PALETTE, seg = null, poly = null }) {
   // `poly` is the wall body as a mitered, filled polygon (clean joints at any
   // junction). Fall back to a thick stroked centerline when it isn't available.
   const fill = selected ? palette.wallLineSel : palette.wallLine;
+  // hover (Select tool): blue outline + pointer cursor so it reads as clickable
+  const hov = onHover ? {
+    onMouseEnter: (e) => { onHover(wall.id); const st = e.target.getStage(); if (st) st.container().style.cursor = 'pointer'; },
+    onMouseLeave: (e) => { onHover(null); const st = e.target.getStage(); if (st) st.container().style.cursor = ''; },
+  } : {};
+  const edge = selected ? fill : (hovered ? BLUE : fill);
+  const ew = selected ? 0.6 : (hovered ? 1.4 : 0.6);
   if (poly && poly.points && poly.points.length >= 3) {
     const pts = poly.points.flatMap((p) => [p.x * scale, p.y * scale]);
     return (
-      <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)}>
-        <Line points={pts} closed fill={fill} stroke={fill} strokeWidth={0.6} lineJoin="round" perfectDrawEnabled={false} shadowForStrokeEnabled={false} />
+      <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)} {...hov}>
+        <Line points={pts} closed fill={fill} stroke={edge} strokeWidth={ew} lineJoin="round" perfectDrawEnabled={false} shadowForStrokeEnabled={false} />
       </Group>
     );
   }
@@ -251,7 +258,7 @@ export function OpeningShape({ op, wall, scale, selected, onSelect, palette = DE
 }
 
 // ---------------- FENCE ----------------
-export function FenceShape({ fence, scale, selected, onSelect, palette = DEFAULT_PALETTE, seg = null, gates = [] }) {
+export function FenceShape({ fence, scale, selected, hovered, onSelect, onHover, palette = DEFAULT_PALETTE, seg = null, gates = [] }) {
   const ft = FENCE_TYPES[fence.fenceType] || FENCE_TYPES.wood;
   const col = fence.color || ft.color;
   const a = seg?.a || fence.a, b = seg?.b || fence.b;
@@ -264,10 +271,15 @@ export function FenceShape({ fence, scale, selected, onSelect, palette = DEFAULT
     return !gates.some((g) => Math.abs(t - g.t) < (g.width / 2) / fenceLen - 0.002);
   });
   const ps = Math.max(3, 0.45 * scale);
+  const hov = onHover ? {
+    onMouseEnter: (e) => { onHover(fence.id); const st = e.target.getStage(); if (st) st.container().style.cursor = 'pointer'; },
+    onMouseLeave: (e) => { onHover(null); const st = e.target.getStage(); if (st) st.container().style.cursor = ''; },
+  } : {};
   return (
-    <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)}>
+    <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)} {...hov}>
       <Line points={pts} stroke={col} strokeWidth={selected ? 5 : 3.5} lineCap="round"
         dash={dash} hitStrokeWidth={14} />
+      {hovered && !selected && <Line points={pts} stroke={BLUE} strokeWidth={2} lineCap="round" opacity={0.6} />}
       {selected && <Line points={pts} stroke={BLUE} strokeWidth={1.5} lineCap="round" dash={[6, 5]} />}
       {posts.map((p, i) => (
         <Rect key={i} x={p.x * scale - ps / 2} y={p.y * scale - ps / 2} width={ps} height={ps}
