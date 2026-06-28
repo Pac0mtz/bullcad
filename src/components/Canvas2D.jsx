@@ -711,18 +711,28 @@ export default function Canvas2D() {
   // at the AVERAGE of the walls' justified band-center endpoints — so the circle
   // sits centered on the wall band corner, not offset to the drawn face, and
   // junctions don't produce overlapping doubles. Diameter = wall thickness.
+  const nodeKey = (p) => `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
   const cornerDots = useMemo(() => {
     const m = new Map(); // raw-node key -> { sx, sy, n, thick }
     const add = (raw, just, th) => {
-      const k = `${Math.round(raw.x * 100)},${Math.round(raw.y * 100)}`;
+      const k = nodeKey(raw);
       const cur = m.get(k);
       if (cur) { cur.sx += just.x; cur.sy += just.y; cur.n++; cur.thick = Math.max(cur.thick, th); }
-      else m.set(k, { sx: just.x, sy: just.y, n: 1, thick: th });
+      else m.set(k, { key: k, sx: just.x, sy: just.y, n: 1, thick: th });
     };
     walls.forEach((w) => { const s = wallSegs.get(w.id); add(w.a, s?.a || w.a, w.thickness || 0.5); add(w.b, s?.b || w.b, w.thickness || 0.5); });
     fences.forEach((f) => { const s = fenceSegs.get(f.id); add(f.a, s?.a || f.a, FENCE_THICK); add(f.b, s?.b || f.b, FENCE_THICK); });
-    return [...m.values()].map((c) => ({ x: c.sx / c.n, y: c.sy / c.n, thick: c.thick }));
+    return [...m.values()].map((c) => ({ key: c.key, x: c.sx / c.n, y: c.sy / c.n, thick: c.thick }));
   }, [walls, fences, wallSegs, fenceSegs]);
+
+  // corners of the currently-selected wall/fence — their gray grip is hidden so
+  // the blue handle is the ONLY circle there (one circle per corner, like 4plan)
+  const selectedNodeKeys = useMemo(() => {
+    const s = new Set();
+    if (selWall) { s.add(nodeKey(selWall.a)); s.add(nodeKey(selWall.b)); }
+    if (selFence) { s.add(nodeKey(selFence.a)); s.add(nodeKey(selFence.b)); }
+    return s;
+  }, [selWall, selFence]);
 
   return (
     <div ref={wrapRef} style={{ position: 'absolute', inset: 0, touchAction: 'none', cursor: (space.current || tool === 'pan') ? 'grab' : tool === 'zoom' ? 'zoom-in' : tool === 'select' ? 'default' : 'crosshair' }}>
@@ -846,6 +856,7 @@ export default function Canvas2D() {
               a round post filling the wall at the corner (min size keeps it tappable) */}
           <Group listening={false}>
             {cornerDots.map((p, i) => {
+              if (selectedNodeKeys.has(p.key)) return null; // blue handle covers this corner
               const r = Math.max(coarse ? 4 : 3, p.thick / 2 * scale * view.k); // = wall thickness on screen
               return (
                 <Group key={'cd' + i} x={p.x * scale} y={p.y * scale} scaleX={1 / view.k} scaleY={1 / view.k}>
