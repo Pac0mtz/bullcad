@@ -48,12 +48,13 @@ function swingGeom(w, inward, hinge = 'left', swing = 'in') {
 // it never bloats. Returns the group scale (applied as scaleX/scaleY).
 const dimScale = (z) => { z = z || 1; return z <= 1 ? 1 / z : z <= 4 ? 1 : 4 / z; };
 
-// Split a dimension line into two segments with a gap for the label so the line
+// Dimension line split into two segments with a gap for the label so the line
 // never strikes through the number. `mid` is the label center, `gapFt` the
-// half-gap (feet). Returns [{a,b},{a,b}] or null when the line is too short.
+// half-gap (feet). When the label fills the whole line (tight openings/windows)
+// it returns [] — no center line at all (the end ticks + number convey it).
 const brokenLine = (p0, p1, mid, gapFt) => {
   const dx = p1.x - p0.x, dy = p1.y - p0.y, len = Math.hypot(dx, dy) || 1;
-  if (len < gapFt * 2.2) return null;
+  if (len / 2 - gapFt <= 0.02) return [];
   const ux = dx / len, uy = dy / len;
   return [
     { a: p0, b: { x: mid.x - ux * gapFt, y: mid.y - uy * gapFt } },
@@ -98,10 +99,9 @@ export function WallDimension({ wall, kind, offset, centroid, justify = 'center'
       {g.witness.map((seg, i) => (
         <Line key={'w' + i} points={[...P(seg[0]), ...P(seg[1])]} stroke={color} strokeWidth={0.6} opacity={0.7} strokeScaleEnabled={false} listening={false} />
       ))}
-      {/* dim line broken around the number (───┤ 13' 6" ├───), not striking through it */}
-      {segs
-        ? segs.map((s, i) => <Line key={'dl' + i} points={[...P(s.a), ...P(s.b)]} stroke={color} strokeWidth={0.6} strokeScaleEnabled={false} listening={false} />)
-        : <Line points={[...P(g.line[0]), ...P(g.line[1])]} stroke={color} strokeWidth={0.6} strokeScaleEnabled={false} listening={false} />}
+      {/* dim line broken around the number (───┤ 13' 6" ├───); on tight runs the
+          label fills the line so no center line is drawn — never strikes text */}
+      {segs.map((s, i) => <Line key={'dl' + i} points={[...P(s.a), ...P(s.b)]} stroke={color} strokeWidth={0.6} strokeScaleEnabled={false} listening={false} />)}
       {g.slashes.map((seg, i) => (
         <Line key={'s' + i} points={[...P(seg[0]), ...P(seg[1])]} stroke={color} strokeWidth={0.9} strokeScaleEnabled={false} listening={false} />
       ))}
@@ -133,9 +133,7 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
         const lw = seg.label.text.length * 5 + 6;
         const mid = { x: (seg.line[0].x + seg.line[1].x) / 2, y: (seg.line[0].y + seg.line[1].y) / 2 };
         const segs = brokenLine(seg.line[0], seg.line[1], mid, ((lw / 2 + 4) * inv) / S);
-        return segs
-          ? segs.map((s, j) => <Line key={'l' + i + '_' + j} points={[...P(s.a), ...P(s.b)]} stroke={color} strokeWidth={0.6} strokeScaleEnabled={false} listening={false} />)
-          : <Line key={'l' + i} points={[...P(seg.line[0]), ...P(seg.line[1])]} stroke={color} strokeWidth={0.6} strokeScaleEnabled={false} listening={false} />;
+        return segs.map((s, j) => <Line key={'l' + i + '_' + j} points={[...P(s.a), ...P(s.b)]} stroke={color} strokeWidth={0.6} strokeScaleEnabled={false} listening={false} />);
       })}
       {g.ticks.map((s, i) => (
         <Line key={'t' + i} points={[...P(s[0]), ...P(s[1])]} stroke={color} strokeWidth={0.8} strokeScaleEnabled={false} listening={false} />

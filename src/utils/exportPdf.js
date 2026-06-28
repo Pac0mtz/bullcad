@@ -16,11 +16,10 @@ const r2 = (n) => Math.round(n * 1000) / 1000;
 
 // A dimension label drawn inside a white rounded pill (matches the on-screen look).
 function dimPill(x, y, angle, text, fs) {
-  // text only — no pill box/border. A white halo keeps the number readable
-  // where it crosses the dimension line.
+  // text only — no pill box/border/halo. The dimension line is broken (or
+  // omitted on tight runs) around the label, so nothing crosses the number.
   const attrs = `x="0" y="${r2(fs * 0.33)}" font-size="${fs}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="600"`;
   return `<g transform="translate(${r2(x)} ${r2(y)}) rotate(${r2(angle)})">`
-    + `<text ${attrs} fill="none" stroke="#ffffff" stroke-width="${r2(fs * 0.32)}" stroke-linejoin="round">${text}</text>`
     + `<text ${attrs} fill="${NAVY}">${text}</text>`
     + `</g>`;
 }
@@ -65,7 +64,9 @@ export function buildPlanSvg(model, opts = {}) {
   const dimLineSVG = (p0, p1, text, fs) => {
     const dx = p1.x - p0.x, dy = p1.y - p0.y, len = Math.hypot(dx, dy) || 1;
     const half = (text.length * fs * 0.6 + fs * 0.7) / 2; // label half-width (feet)
-    if (len < half * 2.3) return `<line x1="${r2(p0.x)}" y1="${r2(p0.y)}" x2="${r2(p1.x)}" y2="${r2(p1.y)}" stroke="${NAVY}" stroke-width="${DIMW}"/>`;
+    // text fills the whole line → draw NO center line (the end ticks + number
+    // convey it); otherwise two stubs with a gap so the line never crosses text
+    if (len / 2 - half <= 0.05) return '';
     const ux = dx / len, uy = dy / len, mx = (p0.x + p1.x) / 2, my = (p0.y + p1.y) / 2;
     return `<line x1="${r2(p0.x)}" y1="${r2(p0.y)}" x2="${r2(mx - ux * half)}" y2="${r2(my - uy * half)}" stroke="${NAVY}" stroke-width="${DIMW}"/>`
       + `<line x1="${r2(mx + ux * half)}" y1="${r2(my + uy * half)}" x2="${r2(p1.x)}" y2="${r2(p1.y)}" stroke="${NAVY}" stroke-width="${DIMW}"/>`;
