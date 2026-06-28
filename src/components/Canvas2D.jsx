@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer, Line, Circle, Text, Group, Rect } from 'react-konva';
 import { useStore } from '../store.js';
 import {
-  dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, wallPolygons, stairGeometry, snapAngle, detectRooms, parseLength,
+  dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, wallPolygons, stairGeometry, snapAngle, detectRooms, roomWalls, roomSignature, parseLength,
 } from '../utils/geometry.js';
 
 const FENCE_THICK = 0.3; // nominal fence body width (ft) for alignment offset
@@ -22,8 +22,15 @@ export default function Canvas2D() {
   const layerRef = useRef(null);
 
   const store = useStore();
-  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, posts, labels, stairs, selection, multi, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, layers, detachCorner } = store;
-  const rooms = useMemo(() => (showRoomAreas ? detectRooms(walls) : []), [showRoomAreas, walls]);
+  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, posts, labels, stairs, selection, multi, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, layers, detachCorner, roomNames } = store;
+  // closed wall loops → rooms. Always detected so the interior gets a white
+  // floor; the `showRoomAreas` toggle only governs the numeric area label.
+  // Each room carries its bounding-wall ids, a stable signature, and its name.
+  const rooms = useMemo(() => detectRooms(walls).map((rm) => {
+    const wallIds = roomWalls(rm, walls);
+    const sig = roomSignature(wallIds);
+    return { ...rm, wallIds, sig, name: (roomNames || {})[sig] || '' };
+  }), [walls, roomNames]);
   const t = CANVAS_THEME[theme] || CANVAS_THEME.light;
 
   const [size, setSize] = useState({ w: 800, h: 600 });
@@ -445,7 +452,22 @@ export default function Canvas2D() {
   const startHandle = (payload) => (e) => {
     e.cancelBubble = true;
     if (tool !== 'select') return;
-    drag.current = { ...payload, moved: false, before: useStore.getState().snapshotGeom() };
+    // Anchor the corner under the exact spot you grabbed: remember where the
+    // cursor sat relative to the node so dragging from ANY side of the big round
+    // handle keeps the geometry centered on the node (no jump to the cursor).
+    const cur = getFeet();
+    const grab = (cur && payload.origin) ? { x: payload.origin.x - cur.x, y: payload.origin.y - cur.y } : { x: 0, y: 0 };
+    drag.current = { ...payload, grab, moved: false, before: useStore.getState().snapshotGeom() };
+  };
+
+  // click a room's floor: select the whole room (its bounding walls) and arm a
+  // group drag so dragging moves every wall of the room together
+  const startRoomDrag = (rm) => (e) => {
+    e.cancelBubble = true;
+    if (tool !== 'select') return;
+    store.selectRoom(rm.sig, rm.wallIds);
+    const raw = getFeet(); if (!raw) return;
+    drag.current = { kind: 'group', items: rm.wallIds.map((id) => ({ type: 'wall', id })), last: snapEnabled ? snapPt(raw, minorStep) : raw, moved: false, before: useStore.getState().snapshotGeom() };
   };
 
   // drag the group bounding box to move every selected element together
@@ -512,13 +534,16 @@ export default function Canvas2D() {
           if (!d.joints.length) d.joints = [{ id: d.id, end: d.end }];
         }
       }
-      let pt = raw;
+      // keep the node where it sat under the cursor when grabbed, so the band
+      // stays centered no matter which side of the round handle you pulled on
+      const g = d.grab || { x: 0, y: 0 };
+      let pt = { x: raw.x + g.x, y: raw.y + g.y };
       if (snapEnabled) {
         // snap to grid or to other nodes (excluding the corner being dragged)
         const jointSet = new Set(d.joints.map((j) => j.id + j.end));
         const others = list.flatMap((e) => ['a', 'b'].filter((end) => !jointSet.has(e.id + end)).map((end) => e[end]));
-        const n = snapToNodes(raw, others, 0.8);
-        pt = n.snapped ? { x: n.x, y: n.y } : snapPt(raw, minorStep);
+        const n = snapToNodes(pt, others, 0.8);
+        pt = n.snapped ? { x: n.x, y: n.y } : snapPt(pt, minorStep);
       }
       store.moveJoints(type, d.joints, pt);
     } else if (d.kind === 'wallMove' || d.kind === 'fenceMove') {
@@ -723,8 +748,10 @@ export default function Canvas2D() {
       if (cur) { cur.sx += just.x; cur.sy += just.y; cur.n++; cur.thick = Math.max(cur.thick, th); }
       else m.set(k, { key: k, sx: just.x, sy: just.y, n: 1, thick: th });
     };
-    walls.forEach((w) => { const s = wallSegs.get(w.id); add(w.a, s?.a || w.a, w.thickness || 0.5); add(w.b, s?.b || w.b, w.thickness || 0.5); });
-    fences.forEach((f) => { const s = fenceSegs.get(f.id); add(f.a, s?.a || f.a, FENCE_THICK); add(f.b, s?.b || f.b, FENCE_THICK); });
+    // at a T-junction the band endpoint is stretched into the through-wall, so
+    // grip on the raw connection point instead (keeps the circle centered there)
+    walls.forEach((w) => { const s = wallSegs.get(w.id); add(w.a, s?.aT ? w.a : (s?.a || w.a), w.thickness || 0.5); add(w.b, s?.bT ? w.b : (s?.b || w.b), w.thickness || 0.5); });
+    fences.forEach((f) => { const s = fenceSegs.get(f.id); add(f.a, s?.aT ? f.a : (s?.a || f.a), FENCE_THICK); add(f.b, s?.bT ? f.b : (s?.b || f.b), FENCE_THICK); });
     return [...m.values()].map((c) => ({ key: c.key, x: c.sx / c.n, y: c.sy / c.n, thick: c.thick }));
   }, [walls, fences, wallSegs, fenceSegs]);
 
@@ -761,6 +788,19 @@ export default function Canvas2D() {
         <Layer ref={layerRef} listening={true}>
           {/* grid */}
           <Group listening={false}>{gridLines}</Group>
+
+          {/* room floors: a solid fill inside every closed wall loop, drawn under
+              the walls so the wall poché trims it to the interior faces. Click to
+              select the whole room (its bounding walls); drag to move them all. */}
+          {layers.walls && rooms.map((rm, i) => {
+            const selRoom = selection?.type === 'room' && selection.id === rm.sig;
+            return (
+              <Line key={'floor' + i} points={rm.polygon.flatMap((p) => [p.x * scale, p.y * scale])}
+                closed fill={selRoom ? t.roomFillSel : t.roomFill}
+                listening={tool === 'select'}
+                onMouseDown={startRoomDrag(rm)} onTouchStart={startRoomDrag(rm)} />
+            );
+          })}
 
           {/* fences (under walls) */}
           {layers.fences && fences.map((f) => (
@@ -883,7 +923,8 @@ export default function Canvas2D() {
             // render the handles on the JUSTIFIED band corner (centered on the wall),
             // but still drag the raw node — matches the gray grips
             const jseg = (kind === 'wallEnd' ? wallSegs : fenceSegs).get(segEl.id);
-            const jpt = (e) => jseg?.[e] || segEl[e];
+            // T-extended ends grip the raw connection point (band-center elsewhere)
+            const jpt = (e) => (jseg?.[e + 'T'] ? segEl[e] : (jseg?.[e] || segEl[e]));
             return (
               <React.Fragment key={kind}>
                 {['a', 'b'].map((end) => (
@@ -999,14 +1040,22 @@ export default function Canvas2D() {
             </>
           )}
 
-          {/* room area labels */}
+          {/* room labels: the name (if set) sits above the interior area, as plain
+              black text — no pill, no border, no background. listening=false so a
+              click falls through to the floor → selects the room. The area number
+              obeys the Canvas "show room areas" toggle. */}
           {rooms.map((rm, i) => {
-            const txt = `${Math.round(rm.area)} sq ft`;
-            const w = txt.length * 7 + 14;
+            const area = `${Math.round(rm.area)} sq ft`;
+            if (!rm.name && !showRoomAreas) return null;
+            const W = 240; // generous box so centered text never clips
             return (
               <Group key={'room' + i} x={rm.centroid.x * scale} y={rm.centroid.y * scale} scaleX={1 / view.k} scaleY={1 / view.k} listening={false}>
-                <Rect x={-w / 2} y={-11} width={w} height={22} cornerRadius={5} fill="rgba(20,184,166,0.12)" stroke={t.fenceDim || '#0d9488'} strokeWidth={1} />
-                <Text x={-w / 2} y={-6} width={w} align="center" text={txt} fontSize={12} fontStyle="700" fill={t.fenceDim || '#0d9488'} />
+                {rm.name && (
+                  <Text x={-W / 2} y={showRoomAreas ? -19 : -8} width={W} align="center" text={rm.name} fontSize={14} fontStyle="700" fill={t.roomText} />
+                )}
+                {showRoomAreas && (
+                  <Text x={-W / 2} y={rm.name ? 2 : -7} width={W} align="center" text={area} fontSize={12} fontStyle="600" fill={t.roomText} />
+                )}
               </Group>
             );
           })}

@@ -2,11 +2,13 @@ import { create } from 'zustand';
 import { uid, FENCE_TYPES, OPENING_DEFAULTS, WINDOW_STYLES } from './utils/geometry.js';
 
 // ----- snapshot helpers for undo/redo -----
-const GEOM_KEYS = ['walls', 'openings', 'fences', 'gates', 'posts', 'labels', 'stairs'];
-const snapshot = (s) => JSON.parse(JSON.stringify(Object.fromEntries(GEOM_KEYS.map((k) => [k, s[k]]))));
+const GEOM_KEYS = ['walls', 'openings', 'fences', 'gates', 'posts', 'labels', 'stairs', 'roomNames'];
+// roomNames is a {signature: name} map; everything else is an array
+const emptyVal = (k) => (k === 'roomNames' ? {} : []);
+const snapshot = (s) => JSON.parse(JSON.stringify(Object.fromEntries(GEOM_KEYS.map((k) => [k, s[k] ?? emptyVal(k)]))));
 // live geometry of a state, and an empty page's geometry
-const geomOf = (s) => Object.fromEntries(GEOM_KEYS.map((k) => [k, s[k]]));
-const emptyGeom = () => Object.fromEntries(GEOM_KEYS.map((k) => [k, []]));
+const geomOf = (s) => Object.fromEntries(GEOM_KEYS.map((k) => [k, s[k] ?? emptyVal(k)]));
+const emptyGeom = () => Object.fromEntries(GEOM_KEYS.map((k) => [k, emptyVal(k)]));
 
 // ----- a small sample plan so the app looks alive on first load -----
 function samplePlan() {
@@ -47,7 +49,7 @@ function samplePlan() {
     { id: uid('gate'), fenceId: fences[0].id, t: 0.5, width: 4 },
   ];
 
-  return { walls, openings, fences, gates, posts: [], labels: [], stairs: [] };
+  return { walls, openings, fences, gates, posts: [], labels: [], stairs: [], roomNames: {} };
 }
 
 // ----- autosave: persist the whole project to localStorage so a refresh (or a
@@ -98,7 +100,7 @@ export const useStore = create((set, get) => ({
   wallColor: '#e2e8f0',
   wallMaterial: 'drywall',
   detachCorner: false, // when on, dragging a corner moves only that wall (split the joint); Alt does this momentarily
-  showRoomAreas: false, // overlay computed room areas on the 2D plan
+  showRoomAreas: true, // overlay the numeric room-area label on each closed room
 
   // ----- layer visibility (view state, not part of undo history) -----
   layers: { walls: true, openings: true, fences: true, gates: true, stairs: true, labels: true, dims: true },
@@ -157,6 +159,10 @@ export const useStore = create((set, get) => ({
   setScale: (scale) => set({ scale: Math.max(4, Math.min(40, scale)) }),
   setSnap: (snapEnabled) => set({ snapEnabled }),
   select: (selection) => set({ selection, multi: selection ? [{ type: selection.type, id: selection.id }] : [] }),
+  // select a whole room: `sig` identifies it, `wallIds` are its bounding walls
+  // (held in `multi` so they highlight and move/delete together as one unit)
+  selectRoom: (sig, wallIds) => set({ selection: { type: 'room', id: sig }, multi: wallIds.map((id) => ({ type: 'wall', id })) }),
+  setRoomName: (sig, name) => get().commit((s) => ({ roomNames: { ...s.roomNames, [sig]: name } })),
   // marquee multi-select: `multi` is the group; `selection` is the one shown in Properties
   selectMany: (items) => set({ multi: items, selection: items.length === 1 ? { type: items[0].type, id: items[0].id } : null }),
   clearSelection: () => set({ selection: null, multi: [] }),
@@ -412,7 +418,7 @@ export const useStore = create((set, get) => ({
     set((s) => ({
       past: [...s.past, snapshot(s)],
       future: [],
-      walls: [], openings: [], fences: [], gates: [], posts: [], labels: [], stairs: [],
+      walls: [], openings: [], fences: [], gates: [], posts: [], labels: [], stairs: [], roomNames: {},
       selection: null,
     })),
 

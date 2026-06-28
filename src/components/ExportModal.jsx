@@ -51,8 +51,8 @@ export default function ExportModal() {
     try {
       const views3d = include3D && canCapture3D ? capture3DViews() : [];
       await exportPlanPDF(
-        { walls: s.walls, openings: s.openings, fences: s.fences, gates: s.gates, labels: s.labels, stairs: s.stairs },
-        { title, fileName, paper, orientation, includeLegend, dimMode, dimUnit: dimUnit === 'in' ? 'in' : undefined, dimOffset, wallJustify: s.wallJustify, fenceJustify: s.fenceJustify, views3d, elevations: elevSel },
+        { walls: s.walls, openings: s.openings, fences: s.fences, gates: s.gates, labels: s.labels, stairs: s.stairs, roomNames: s.roomNames },
+        { title, fileName, paper, orientation, includeLegend, dimMode, dimUnit: dimUnit === 'in' ? 'in' : undefined, dimOffset, wallJustify: s.wallJustify, fenceJustify: s.fenceJustify, showRoomAreas: s.showRoomAreas, views3d, elevations: elevSel },
       );
       setOpen(false);
     } catch (err) {

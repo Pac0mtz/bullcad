@@ -8,6 +8,9 @@
 export const CANVAS_THEME = {
   light: {
     stageBg: '#f1f5f9',
+    roomFill: '#ffffff', // closed rooms get a white floor so the interior reads
+    roomFillSel: '#e0edff', // a blue wash when the room is selected
+    roomText: '#0f172a', // room name + area: plain black text, no pill
     gridMajor: '#d2dbe6',
     gridMinor: '#e6ecf3',
     axis: '#c3cedb',
@@ -32,6 +35,9 @@ export const CANVAS_THEME = {
   },
   dark: {
     stageBg: '#0b1220',
+    roomFill: '#1b2840', // a lighter slab than the stage so rooms read at night
+    roomFillSel: '#24385c', // a blue wash when the room is selected
+    roomText: '#e2e8f0', // legible room text on the dark floor
     gridMajor: '#18222f',
     gridMinor: '#111b27',
     axis: '#2a3a50',

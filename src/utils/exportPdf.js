@@ -6,7 +6,7 @@ import { jsPDF } from 'jspdf';
 import { svg2pdf } from 'svg2pdf.js';
 import {
   dist, lerp, angleOf, centroidOf, wallDimGeometry, wallOpeningDimGeometry, justifiedSegments, WINDOW_STYLES, FENCE_TYPES, postsAlong,
-  formatFeetInches, windowBars, stairGeometry,
+  formatFeetInches, windowBars, stairGeometry, detectRooms, roomWalls, roomSignature,
 } from './geometry.js';
 import { computeQuantities, fenceComponents } from './quantities.js';
 
@@ -236,6 +236,18 @@ export function buildPlanSvg(model, opts = {}) {
       const ty = p.y - ph / 2 + ff * 1.02 + i * ff * 1.32;
       el.push(`<text x="${r2(p.x)}" y="${r2(ty)}" font-size="${r2(ff)}" fill="#1e293b" font-family="Helvetica, Arial, sans-serif" font-weight="600" text-anchor="middle">${escXml(row)}</text>`);
     });
+  });
+
+  // room labels: name above the interior-face area, plain black text (no pill /
+  // border / background), matching the on-screen plan
+  const roomNames = model.roomNames || {};
+  detectRooms(walls).forEach((rm) => {
+    const name = roomNames[roomSignature(roomWalls(rm, walls))] || '';
+    const showArea = opts.showRoomAreas !== false;
+    if (!name && !showArea) return;
+    const cx = rm.centroid.x, cy = rm.centroid.y;
+    if (name) el.push(`<text x="${r2(cx)}" y="${r2(cy - (showArea ? 0.3 : -0.1))}" font-size="0.62" fill="#0f172a" font-family="Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle">${escXml(name)}</text>`);
+    if (showArea) el.push(`<text x="${r2(cx)}" y="${r2(cy + (name ? 0.62 : 0.18))}" font-size="0.5" fill="#0f172a" font-family="Helvetica, Arial, sans-serif" font-weight="600" text-anchor="middle">${Math.round(rm.area)} sq ft</text>`);
   });
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${r2(minX)} ${r2(minY)} ${r2(wFt)} ${r2(hFt)}" width="${r2(wFt)}" height="${r2(hFt)}">${el.join('')}</svg>`;

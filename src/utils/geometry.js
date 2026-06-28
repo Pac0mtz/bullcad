@@ -318,6 +318,10 @@ export function justifiedSegments(segs, justify, centroid, thicknessOf) {
       if (!best) continue;
       r[end] = { x: best.x + ox * 0.02, y: best.y + oy * 0.02 };
       r[end + 'Joined'] = true;
+      // mark this as a T-extension: the body was pushed into the through-wall,
+      // so a grip/handle here must sit on the RAW connection point (the through
+      // wall's centerline), not on this stretched-out band endpoint.
+      r[end + 'T'] = true;
     }
   }
   return out;
@@ -598,22 +602,63 @@ export function snapAngle(a, pt, stepDeg = 15) {
 // Detect enclosed rooms from the wall graph via planar face traversal. Returns
 // [{ polygon, area, centroid }] for each bounded face (sq ft, centerline). The
 // unbounded outer face is dropped. Defensive: returns [] on any malformed graph.
+// Inset a room's centerline polygon to the interior wall faces: each edge is
+// offset toward the centroid by half the thickness of the wall lying along it,
+// then re-cornered at the offset-line intersections. Returns the inner polygon
+// + its (net floor) area. Used to report area "to the inside of the walls".
+function insetPolygon(poly, walls) {
+  const n = poly.length;
+  const area = (pts) => { let A = 0; for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; A += p.x * q.y - q.x * p.y; } return A / 2; };
+  if (n < 3) return { polygon: poly, area: area(poly) };
+  const c = centroidOf(poly);
+  const lines = [];
+  for (let i = 0; i < n; i++) {
+    const p = poly[i], q = poly[(i + 1) % n];
+    const L = Math.hypot(q.x - p.x, q.y - p.y) || 1;
+    const mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+    let half = 0.25, best = 0.35;
+    for (const w of walls) { const pr = projectOnSegment(mid, w.a, w.b); if (pr.distance < best) { best = pr.distance; half = (w.thickness || 0.5) / 2; } }
+    let nx = -(q.y - p.y) / L, ny = (q.x - p.x) / L; // inward normal (toward centroid)
+    if (nx * (c.x - mid.x) + ny * (c.y - mid.y) < 0) { nx = -nx; ny = -ny; }
+    lines.push({ o: { x: p.x + nx * half, y: p.y + ny * half }, d: { x: (q.x - p.x) / L, y: (q.y - p.y) / L } });
+  }
+  const inner = [];
+  for (let i = 0; i < n; i++) { const a = lines[(i - 1 + n) % n], b = lines[i]; inner.push(lineIntersect(a.o, a.d, b.o, b.d) || poly[i]); }
+  return { polygon: inner, area: area(inner) };
+}
+
 export function detectRooms(walls) {
   try {
     const Q = (v) => `${Math.round(v.x * 100) / 100},${Math.round(v.y * 100) / 100}`;
     const nodes = new Map();
     const node = (v) => { const k = Q(v); if (!nodes.has(k)) nodes.set(k, { x: v.x, y: v.y, key: k, out: [] }); return nodes.get(k); };
     const halfEdges = [];
-    for (const w of walls) {
-      if (dist(w.a, w.b) < 0.1) continue;
-      const na = node(w.a), nb = node(w.b);
-      if (na.key === nb.key) continue;
+    const addEdge = (na, nb) => {
+      if (na.key === nb.key) return;
       const e1 = { from: na, to: nb }, e2 = { from: nb, to: na };
       e1.twin = e2; e2.twin = e1;
       e1.ang = Math.atan2(nb.y - na.y, nb.x - na.x);
       e2.ang = Math.atan2(na.y - nb.y, na.x - nb.x);
       na.out.push(e1); nb.out.push(e2);
       halfEdges.push(e1, e2);
+    };
+    const segs = walls.filter((w) => dist(w.a, w.b) >= 0.1);
+    for (const w of segs) {
+      // split this wall at any point where ANOTHER wall ties into its middle
+      // (a T-junction). Without this, a room whose side is the mid-span of a
+      // pass-through wall never closes into a loop and is missed entirely.
+      const pts = [{ x: w.a.x, y: w.a.y, t: 0 }, { x: w.b.x, y: w.b.y, t: 1 }];
+      for (const o of segs) {
+        if (o === w) continue;
+        for (const P of [o.a, o.b]) {
+          const pr = projectOnSegment(P, w.a, w.b);
+          if (pr.distance < 0.12 && pr.t > 1e-3 && pr.t < 1 - 1e-3) pts.push({ x: P.x, y: P.y, t: pr.t });
+        }
+      }
+      pts.sort((p, q) => p.t - q.t);
+      const chain = [];
+      for (const p of pts) { const last = chain[chain.length - 1]; if (!last || Math.hypot(p.x - last.x, p.y - last.y) > 1e-3) chain.push(p); }
+      for (let i = 0; i < chain.length - 1; i++) addEdge(node(chain[i]), node(chain[i + 1]));
     }
     for (const n of nodes.values()) n.out.sort((a, b) => a.ang - b.ang);
     const nextOf = (e) => { const list = e.to.out; const i = list.indexOf(e.twin); return list[(i - 1 + list.length) % list.length]; };
@@ -628,11 +673,36 @@ export function detectRooms(walls) {
       for (let i = 0; i < poly.length; i++) { const p = poly[i], q = poly[(i + 1) % poly.length]; const cr = p.x * q.y - q.x * p.y; A += cr; cx += (p.x + q.x) * cr; cy += (p.y + q.y) * cr; }
       A /= 2;
       if (A <= 4) continue; // outer face has the opposite sign; tiny slivers dropped
-      rooms.push({ polygon: poly, area: A, centroid: { x: cx / (6 * A), y: cy / (6 * A) } });
+      // Net floor area = inside the wall FACES, not the centerline loop: push each
+      // edge inward by half the bounding wall's thickness and measure that polygon.
+      const interior = insetPolygon(poly, walls);
+      rooms.push({ polygon: poly, area: Math.abs(interior.area) || A, centroid: { x: cx / (6 * A), y: cy / (6 * A) } });
     }
     return rooms;
   } catch { return []; }
 }
+
+// Wall ids whose segments run along a detected room's polygon edges — the walls
+// that bound the room. Sorted + joined they form a stable "signature" that
+// survives moves (wall ids don't change), so a room can carry a persistent name
+// and be selected / dragged as a single unit.
+export function roomWalls(room, walls) {
+  const ids = new Set();
+  const poly = room.polygon;
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length];
+    const mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+    let best = null, bestD = 0.25;
+    for (const w of walls) {
+      const pm = projectOnSegment(mid, w.a, w.b);
+      const pa = projectOnSegment(p, w.a, w.b), pb = projectOnSegment(q, w.a, w.b);
+      if (pm.distance < bestD && pa.distance < 0.25 && pb.distance < 0.25) { best = w.id; bestD = pm.distance; }
+    }
+    if (best) ids.add(best);
+  }
+  return [...ids];
+}
+export const roomSignature = (wallIds) => [...wallIds].sort().join('|');
 
 // Parse a user-typed length into FEET. Accepts decimal feet ("12.5"),
 // feet-inches ("12' 6\"", "12'6", "12 ft 6 in"), or inches ("150\"", "150 in").

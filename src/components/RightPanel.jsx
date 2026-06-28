@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store.js';
 import { Section, PanelHead } from './ui.jsx';
-import { dist, formatFeetInches, parseLength, FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS, STAIR_TYPES, STAIR_TYPE_ORDER } from '../utils/geometry.js';
+import { dist, formatFeetInches, parseLength, detectRooms, roomWalls, roomSignature, FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS, STAIR_TYPES, STAIR_TYPE_ORDER } from '../utils/geometry.js';
 import { computeQuantities, quantitiesRows } from '../utils/quantities.js';
 import { IconTrash } from './Icons.jsx';
 import FenceGlyph from './FenceGlyph.jsx';
@@ -54,6 +54,27 @@ function ElevationButton({ type, id }) {
   );
 }
 
+// Properties for a whole-room selection: name it, see its area, move/delete it.
+function RoomProps({ sig, area, wallCount }) {
+  const stored = useStore((s) => (s.roomNames || {})[sig] || '');
+  const setRoomName = useStore((s) => s.setRoomName);
+  const del = useStore((s) => s.deleteSelected);
+  const [txt, setTxt] = useState(stored);
+  return (
+    <div>
+      <div className="field">
+        <label>Room name</label>
+        <input type="text" value={txt} placeholder="e.g. Bedroom" autoFocus
+          onChange={(e) => setTxt(e.target.value)}
+          onBlur={() => { if (txt !== stored) setRoomName(sig, txt); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setTxt(stored); e.currentTarget.blur(); } }} />
+      </div>
+      <p className="empty-note">Area <b>{area} sq ft</b>{wallCount ? ` · ${wallCount} walls` : ''}. Drag the room floor on the canvas to move the whole room together.</p>
+      <button className="btn danger del-btn" onClick={del}><IconTrash style={{ width: 16, height: 16 }} /> Delete room</button>
+    </div>
+  );
+}
+
 function SelectedProps() {
   const sel = useStore((s) => s.selection);
   const multi = useStore((s) => s.multi);
@@ -87,6 +108,11 @@ function SelectedProps() {
       );
     }
     return <p className="empty-note">Nothing selected. Use the <b>Select</b> tool and click any wall, fence, door, window, gate, or label to edit it. Drag a box to select several.</p>;
+  }
+
+  if (sel.type === 'room') {
+    const match = detectRooms(walls).map((r) => ({ r, sig: roomSignature(roomWalls(r, walls)) })).find((x) => x.sig === sel.id);
+    return <RoomProps key={sel.id} sig={sel.id} area={match ? Math.round(match.r.area) : 0} wallCount={multi.length} />;
   }
 
   const list = { wall: walls, opening: openings, fence: fences, gate: gates, post: posts, label: labels, stair: stairs }[sel.type];
