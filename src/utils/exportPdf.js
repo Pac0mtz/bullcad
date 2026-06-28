@@ -53,6 +53,24 @@ export function buildPlanSvg(model, opts = {}) {
   const fSeg = (f) => fenceSegs.get(f.id) || { a: f.a, b: f.b };
   const el = [];
 
+  // On-page scale (points per foot) so label fonts can be set in real POINTS:
+  // the SVG is in feet and gets scaled by `sc` to fit the page. ptFt(10) is the
+  // feet value that renders as 10pt. Fallback when the fit box isn't supplied.
+  const sc = (opts.fitW > 0 && opts.fitH > 0) ? Math.min(opts.fitW / wFt, opts.fitH / hFt) : 12;
+  const ptFt = (pt) => pt / sc;
+  const dimFs = ptFt(10);              // dimension numbers: 10 pt
+  const DIMW = 0.035;                  // dim-line stroke (feet)
+  // a dimension line split around its label (───┤ 13' 6" ├───) so it never
+  // strikes through the number
+  const dimLineSVG = (p0, p1, text, fs) => {
+    const dx = p1.x - p0.x, dy = p1.y - p0.y, len = Math.hypot(dx, dy) || 1;
+    const half = (text.length * fs * 0.6 + fs * 0.7) / 2; // label half-width (feet)
+    if (len < half * 2.3) return `<line x1="${r2(p0.x)}" y1="${r2(p0.y)}" x2="${r2(p1.x)}" y2="${r2(p1.y)}" stroke="${NAVY}" stroke-width="${DIMW}"/>`;
+    const ux = dx / len, uy = dy / len, mx = (p0.x + p1.x) / 2, my = (p0.y + p1.y) / 2;
+    return `<line x1="${r2(p0.x)}" y1="${r2(p0.y)}" x2="${r2(mx - ux * half)}" y2="${r2(my - uy * half)}" stroke="${NAVY}" stroke-width="${DIMW}"/>`
+      + `<line x1="${r2(mx + ux * half)}" y1="${r2(my + uy * half)}" x2="${r2(p1.x)}" y2="${r2(p1.y)}" stroke="${NAVY}" stroke-width="${DIMW}"/>`;
+  };
+
   fences.forEach((f) => {
     const ft = FENCE_TYPES[f.fenceType] || FENCE_TYPES.wood;
     const s = fSeg(f);
@@ -171,9 +189,9 @@ export function buildPlanSvg(model, opts = {}) {
     const dg = wallDimGeometry(w, k, (w.dimOff ?? baseOff) + extra, centroid, wj, unit);
     if (!dg) return;
     dg.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.035"/>`));
-    el.push(`<line x1="${r2(dg.line[0].x)}" y1="${r2(dg.line[0].y)}" x2="${r2(dg.line[1].x)}" y2="${r2(dg.line[1].y)}" stroke="${NAVY}" stroke-width="0.035"/>`);
+    el.push(dimLineSVG(dg.line[0], dg.line[1], dg.label.text, dimFs));
     dg.slashes.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.06"/>`));
-    el.push(dimPill(dg.label.x, dg.label.y, dg.label.angle, dg.label.text, 0.5));
+    el.push(dimPill(dg.label.x, dg.label.y, dg.label.angle, dg.label.text, dimFs));
   }));
 
   // opening dimension strings (wall length split at every opening)
@@ -182,9 +200,9 @@ export function buildPlanSvg(model, opts = {}) {
     const og = wallOpeningDimGeometry(w, wops, w.openDimOff ?? baseOff, centroid, wj, unit);
     if (!og) return;
     og.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.03"/>`));
-    og.segments.forEach((seg) => el.push(`<line x1="${r2(seg.line[0].x)}" y1="${r2(seg.line[0].y)}" x2="${r2(seg.line[1].x)}" y2="${r2(seg.line[1].y)}" stroke="${NAVY}" stroke-width="0.03"/>`));
+    og.segments.forEach((seg) => el.push(dimLineSVG(seg.line[0], seg.line[1], seg.label.text, dimFs)));
     og.ticks.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.05"/>`));
-    og.segments.forEach((seg) => el.push(dimPill(seg.label.x, seg.label.y, seg.label.angle, seg.label.text, 0.42)));
+    og.segments.forEach((seg) => el.push(dimPill(seg.label.x, seg.label.y, seg.label.angle, seg.label.text, dimFs)));
   });
 
   // fence dimensions — overall length + gate splits (mirrors walls)
@@ -196,16 +214,16 @@ export function buildPlanSvg(model, opts = {}) {
     const dg = wallDimGeometry(fw, 'centerline', fbase + extra, fenceCentroid, fj, unit);
     if (dg) {
       dg.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.035"/>`));
-      el.push(`<line x1="${r2(dg.line[0].x)}" y1="${r2(dg.line[0].y)}" x2="${r2(dg.line[1].x)}" y2="${r2(dg.line[1].y)}" stroke="${NAVY}" stroke-width="0.035"/>`);
+      el.push(dimLineSVG(dg.line[0], dg.line[1], dg.label.text, dimFs));
       dg.slashes.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.06"/>`));
-      el.push(dimPill(dg.label.x, dg.label.y, dg.label.angle, dg.label.text, 0.46));
+      el.push(dimPill(dg.label.x, dg.label.y, dg.label.angle, dg.label.text, dimFs));
     }
     const og = wallOpeningDimGeometry(fw, fgates, f.openDimOff ?? fbase, fenceCentroid, fj, unit);
     if (og) {
       og.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.03"/>`));
-      og.segments.forEach((seg) => el.push(`<line x1="${r2(seg.line[0].x)}" y1="${r2(seg.line[0].y)}" x2="${r2(seg.line[1].x)}" y2="${r2(seg.line[1].y)}" stroke="${NAVY}" stroke-width="0.03"/>`));
+      og.segments.forEach((seg) => el.push(dimLineSVG(seg.line[0], seg.line[1], seg.label.text, dimFs)));
       og.ticks.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.05"/>`));
-      og.segments.forEach((seg) => el.push(dimPill(seg.label.x, seg.label.y, seg.label.angle, seg.label.text, 0.38)));
+      og.segments.forEach((seg) => el.push(dimPill(seg.label.x, seg.label.y, seg.label.angle, seg.label.text, dimFs)));
     }
   });
 
@@ -261,8 +279,9 @@ export function buildPlanSvg(model, opts = {}) {
     const showArea = opts.showRoomAreas !== false;
     if (!name && !showArea) return;
     const cx = rm.centroid.x, cy = rm.centroid.y;
-    if (name) el.push(roomLabel(cx, cy - (showArea ? 0.3 : -0.1), escXml(name), 0.62, true));
-    if (showArea) el.push(roomLabel(cx, cy + (name ? 0.62 : 0.18), `${Math.round(rm.area)} sq ft`, 0.5, false));
+    const nameFs = ptFt(13), areaFs = ptFt(11); // room labels in real points too
+    if (name) el.push(roomLabel(cx, cy - (showArea ? areaFs * 0.75 : -areaFs * 0.35), escXml(name), nameFs, true));
+    if (showArea) el.push(roomLabel(cx, cy + (name ? nameFs * 0.85 : areaFs * 0.35), `${Math.round(rm.area)} sq ft`, areaFs, false));
   });
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${r2(minX)} ${r2(minY)} ${r2(wFt)} ${r2(hFt)}" width="${r2(wFt)}" height="${r2(hFt)}">${el.join('')}</svg>`;
@@ -435,7 +454,6 @@ function drawLegend(doc, q, model, opts, x, y, w, h) {
 
 export async function exportPlanPDF(model, opts = {}) {
   const q = computeQuantities(model);
-  const { svg, wFt, hFt } = buildPlanSvg(model, opts);
 
   const orientation = opts.orientation || 'landscape';
   const format = opts.paper || 'letter';
@@ -449,14 +467,18 @@ export async function exportPlanPDF(model, opts = {}) {
   const areaX = M, areaY = M;
   const areaW = PW - M * 2 - legendW - gap;
   const areaH = PH - M * 2;
+  const innerPad = 16;
+  const fitW = areaW - innerPad * 2, fitH = areaH - innerPad * 2;
+
+  // build the plan knowing the on-page fit box, so label fonts come out as real
+  // points (10pt dimensions) regardless of plan size
+  const { svg, wFt, hFt } = buildPlanSvg(model, { ...opts, fitW, fitH });
 
   // drawing border
   doc.setDrawColor(148, 163, 184); doc.setLineWidth(1.2);
   doc.roundedRect(areaX, areaY, areaW, areaH, 4, 4, 'S');
 
   // fit the plan (aspect-correct) inside the drawing area
-  const innerPad = 16;
-  const fitW = areaW - innerPad * 2, fitH = areaH - innerPad * 2;
   const sc = Math.min(fitW / wFt, fitH / hFt);
   const dw = wFt * sc, dh = hFt * sc;
   const dx = areaX + innerPad + (fitW - dw) / 2;

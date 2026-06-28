@@ -42,6 +42,25 @@ function swingGeom(w, inward, hinge = 'left', swing = 'in') {
   return { d, hx, rotation };
 }
 
+// Dimension text scale vs zoom. Zoomed out (≤1×) it stays a constant screen size
+// so it's readable; from 1×→4× it grows WITH the plan (so zooming in no longer
+// makes the numbers look tiny next to the enlarged walls); past 4× it's capped so
+// it never bloats. Returns the group scale (applied as scaleX/scaleY).
+const dimScale = (z) => { z = z || 1; return z <= 1 ? 1 / z : z <= 4 ? 1 : 4 / z; };
+
+// Split a dimension line into two segments with a gap for the label so the line
+// never strikes through the number. `mid` is the label center, `gapFt` the
+// half-gap (feet). Returns [{a,b},{a,b}] or null when the line is too short.
+const brokenLine = (p0, p1, mid, gapFt) => {
+  const dx = p1.x - p0.x, dy = p1.y - p0.y, len = Math.hypot(dx, dy) || 1;
+  if (len < gapFt * 2.2) return null;
+  const ux = dx / len, uy = dy / len;
+  return [
+    { a: p0, b: { x: mid.x - ux * gapFt, y: mid.y - uy * gapFt } },
+    { a: { x: mid.x + ux * gapFt, y: mid.y + uy * gapFt }, b: p1 },
+  ];
+};
+
 // ---- dimension label centered on a segment, rotated to follow its direction ----
 export function DimLabel({ a, b, scale, color = NAVY, off = 0.9, palette = DEFAULT_PALETTE, zoom = 1 }) {
   const L = dist(a, b);
@@ -52,7 +71,7 @@ export function DimLabel({ a, b, scale, color = NAVY, off = 0.9, palette = DEFAU
   const cy = (mid.y + ny * off) * scale;
   const txt = formatFeetInches(L);
   const w = txt.length * 5.4 + 7;
-  const inv = 1 / (zoom || 1); // keep the pill a constant screen size when zoomed
+  const inv = dimScale(zoom);
   let angle = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
   if (angle > 90 || angle < -90) angle += 180; // keep text upright
   return (
@@ -70,24 +89,28 @@ export function WallDimension({ wall, kind, offset, centroid, justify = 'center'
   const S = scale;
   const P = (p) => [p.x * S, p.y * S];
   const w = g.label.text.length * 5.4 + 7;
-  const inv = 1 / (zoom || 1);
+  const inv = dimScale(zoom);
+  const gapFt = ((w / 2 + 5) * inv) / S; // gap so the line clears the number
+  const segs = brokenLine(g.line[0], g.line[1], g.label, gapFt);
   const setCur = (c) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = c; };
   return (
     <Group>
       {g.witness.map((seg, i) => (
         <Line key={'w' + i} points={[...P(seg[0]), ...P(seg[1])]} stroke={color} strokeWidth={0.6} opacity={0.7} strokeScaleEnabled={false} listening={false} />
       ))}
-      <Line points={[...P(g.line[0]), ...P(g.line[1])]} stroke={color} strokeWidth={0.6} strokeScaleEnabled={false} listening={false} />
+      {/* dim line broken around the number (───┤ 13' 6" ├───), not striking through it */}
+      {segs
+        ? segs.map((s, i) => <Line key={'dl' + i} points={[...P(s.a), ...P(s.b)]} stroke={color} strokeWidth={0.6} strokeScaleEnabled={false} listening={false} />)
+        : <Line points={[...P(g.line[0]), ...P(g.line[1])]} stroke={color} strokeWidth={0.6} strokeScaleEnabled={false} listening={false} />}
       {g.slashes.map((seg, i) => (
         <Line key={'s' + i} points={[...P(seg[0]), ...P(seg[1])]} stroke={color} strokeWidth={0.9} strokeScaleEnabled={false} listening={false} />
       ))}
-      {/* draggable pill — drag perpendicular to change the dimension offset */}
+      {/* draggable hit area (pill removed) — drag perpendicular to set the offset */}
       <Group x={g.label.x * S} y={g.label.y * S} rotation={g.label.angle} scaleX={inv} scaleY={inv}
         onMouseDown={onPillDown} onTouchStart={onPillDown}
         onMouseEnter={onPillDown && setCur('move')} onMouseLeave={onPillDown && setCur('')}>
-        {/* invisible hit area keeps the dim draggable; the pill itself is gone */}
         <Rect x={-w / 2} y={-6.5} width={w} height={13} fill="rgba(0,0,0,0.001)" />
-        <Text x={-w / 2} y={-4.5} width={w} align="center" text={g.label.text} fontSize={9.5} fontStyle="600" fill={color} stroke={palette.opMask} strokeWidth={3} fillAfterStrokeEnabled lineJoin="round" listening={false} />
+        <Text x={-w / 2} y={-4.5} width={w} align="center" text={g.label.text} fontSize={9.5} fontStyle="600" fill={color} listening={false} />
       </Group>
     </Group>
   );
@@ -99,16 +122,21 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
   if (!g) return null;
   const S = scale;
   const P = (p) => [p.x * S, p.y * S];
-  const inv = 1 / (zoom || 1);
+  const inv = dimScale(zoom);
   const setCur = (c) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = c; };
   return (
     <Group>
       {g.witness.map((s, i) => (
         <Line key={'w' + i} points={[...P(s[0]), ...P(s[1])]} stroke={color} strokeWidth={0.5} opacity={0.5} strokeScaleEnabled={false} listening={false} />
       ))}
-      {g.segments.map((seg, i) => (
-        <Line key={'l' + i} points={[...P(seg.line[0]), ...P(seg.line[1])]} stroke={color} strokeWidth={0.6} strokeScaleEnabled={false} listening={false} />
-      ))}
+      {g.segments.map((seg, i) => {
+        const lw = seg.label.text.length * 5 + 6;
+        const mid = { x: (seg.line[0].x + seg.line[1].x) / 2, y: (seg.line[0].y + seg.line[1].y) / 2 };
+        const segs = brokenLine(seg.line[0], seg.line[1], mid, ((lw / 2 + 4) * inv) / S);
+        return segs
+          ? segs.map((s, j) => <Line key={'l' + i + '_' + j} points={[...P(s.a), ...P(s.b)]} stroke={color} strokeWidth={0.6} strokeScaleEnabled={false} listening={false} />)
+          : <Line key={'l' + i} points={[...P(seg.line[0]), ...P(seg.line[1])]} stroke={color} strokeWidth={0.6} strokeScaleEnabled={false} listening={false} />;
+      })}
       {g.ticks.map((s, i) => (
         <Line key={'t' + i} points={[...P(s[0]), ...P(s[1])]} stroke={color} strokeWidth={0.8} strokeScaleEnabled={false} listening={false} />
       ))}
@@ -119,7 +147,7 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
             onMouseDown={onPillDown} onTouchStart={onPillDown}
             onMouseEnter={onPillDown && setCur('move')} onMouseLeave={onPillDown && setCur('')}>
             <Rect x={-w / 2} y={-6} width={w} height={12} fill="rgba(0,0,0,0.001)" />
-            <Text x={-w / 2} y={-4.5} width={w} align="center" text={seg.label.text} fontSize={8.5} fontStyle="600" fill={color} stroke={palette.opMask} strokeWidth={3} fillAfterStrokeEnabled lineJoin="round" listening={false} />
+            <Text x={-w / 2} y={-4.5} width={w} align="center" text={seg.label.text} fontSize={8.5} fontStyle="600" fill={color} listening={false} />
           </Group>
         );
       })}
