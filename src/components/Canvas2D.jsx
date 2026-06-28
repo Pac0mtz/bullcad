@@ -681,21 +681,6 @@ export default function Canvas2D() {
     return isFinite(minx) ? { minx, miny, maxx, maxy } : null;
   }, [multi, walls, fences, stairs, labels]);
 
-  // every wall + fence corner, deduped — drawn as a small gray grip that's always
-  // visible (turns blue when its element is selected, via the handles below)
-  const cornerDots = useMemo(() => {
-    const m = new Map(); // key -> { x, y, thick } (thickest wall/fence body at this corner)
-    const addPt = (p, th) => {
-      const k = `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
-      const cur = m.get(k);
-      if (cur) cur.thick = Math.max(cur.thick, th);
-      else m.set(k, { x: p.x, y: p.y, thick: th });
-    };
-    walls.forEach((w) => [w.a, w.b].forEach((p) => addPt(p, w.thickness || 0.5)));
-    fences.forEach((f) => [f.a, f.b].forEach((p) => addPt(p, FENCE_THICK)));
-    return [...m.values()];
-  }, [walls, fences]);
-
   // building center — tells interior from exterior for dimensioning + alignment
   const wallCentroid = useMemo(() => centroidOf(walls.flatMap((w) => [w.a, w.b])), [walls]);
   const fenceCentroid = useMemo(() => centroidOf(fences.flatMap((f) => [f.a, f.b])), [fences]);
@@ -721,6 +706,23 @@ export default function Canvas2D() {
   const fenceSegs = useMemo(
     () => justifiedSegments(fences, fenceJustify, fenceCentroid, () => FENCE_THICK),
     [fences, fenceJustify, fenceCentroid]);
+
+  // corner grips: ONE per shared node (deduped by the raw endpoint), positioned
+  // at the AVERAGE of the walls' justified band-center endpoints — so the circle
+  // sits centered on the wall band corner, not offset to the drawn face, and
+  // junctions don't produce overlapping doubles. Diameter = wall thickness.
+  const cornerDots = useMemo(() => {
+    const m = new Map(); // raw-node key -> { sx, sy, n, thick }
+    const add = (raw, just, th) => {
+      const k = `${Math.round(raw.x * 100)},${Math.round(raw.y * 100)}`;
+      const cur = m.get(k);
+      if (cur) { cur.sx += just.x; cur.sy += just.y; cur.n++; cur.thick = Math.max(cur.thick, th); }
+      else m.set(k, { sx: just.x, sy: just.y, n: 1, thick: th });
+    };
+    walls.forEach((w) => { const s = wallSegs.get(w.id); add(w.a, s?.a || w.a, w.thickness || 0.5); add(w.b, s?.b || w.b, w.thickness || 0.5); });
+    fences.forEach((f) => { const s = fenceSegs.get(f.id); add(f.a, s?.a || f.a, FENCE_THICK); add(f.b, s?.b || f.b, FENCE_THICK); });
+    return [...m.values()].map((c) => ({ x: c.sx / c.n, y: c.sy / c.n, thick: c.thick }));
+  }, [walls, fences, wallSegs, fenceSegs]);
 
   return (
     <div ref={wrapRef} style={{ position: 'absolute', inset: 0, touchAction: 'none', cursor: (space.current || tool === 'pan') ? 'grab' : tool === 'zoom' ? 'zoom-in' : tool === 'select' ? 'default' : 'crosshair' }}>
@@ -864,10 +866,14 @@ export default function Canvas2D() {
             const rr = Math.max(coarse ? 9 : 6, Math.min(band * 0.5, coarse ? 46 : 40));
             const amberS = Math.max(coarse ? 8 : 6, Math.min(band * 0.42, coarse ? 36 : 30));
             const offScreen = Math.max(coarse ? 34 : 26, band * 1.25); // the "break" sits ~1.25 wall-widths off the corner
+            // render the handles on the JUSTIFIED band corner (centered on the wall),
+            // but still drag the raw node — matches the gray grips
+            const jseg = (kind === 'wallEnd' ? wallSegs : fenceSegs).get(segEl.id);
+            const jpt = (e) => jseg?.[e] || segEl[e];
             return (
               <React.Fragment key={kind}>
                 {['a', 'b'].map((end) => (
-                  <Group key={end} x={segEl[end].x * scale} y={segEl[end].y * scale} scaleX={1 / view.k} scaleY={1 / view.k}
+                  <Group key={end} x={jpt(end).x * scale} y={jpt(end).y * scale} scaleX={1 / view.k} scaleY={1 / view.k}
                     onMouseDown={startHandle({ kind, id: segEl.id, end, origin: { ...segEl[end] } })}
                     onTouchStart={startHandle({ kind, id: segEl.id, end, origin: { ...segEl[end] } })}>
                     <Circle radius={rr} fill="#fff" stroke={BLUE} strokeWidth={Math.max(2, rr * 0.14)} hitStrokeWidth={Math.max(coarse ? 22 : 10, rr)} />
@@ -878,10 +884,11 @@ export default function Canvas2D() {
                   const shared = list.some((e) => e.id !== segEl.id && (dist(e.a, pt) < 0.05 || dist(e.b, pt) < 0.05));
                   if (!shared) return null;
                   const other = end === 'a' ? 'b' : 'a';
+                  const jp = jpt(end);
                   const L = dist(pt, segEl[other]) || 1;
                   const D = offScreen / view.k; // screen-constant offset into the segment
-                  const hx = pt.x * scale + (segEl[other].x - pt.x) / L * D;
-                  const hy = pt.y * scale + (segEl[other].y - pt.y) / L * D;
+                  const hx = jp.x * scale + (segEl[other].x - pt.x) / L * D;
+                  const hy = jp.y * scale + (segEl[other].y - pt.y) / L * D;
                   const start = startHandle({ kind, id: segEl.id, end, origin: { ...pt }, solo: true });
                   const s = amberS;
                   const setCur = (c) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = c; };
