@@ -8,9 +8,9 @@
 export const CANVAS_THEME = {
   light: {
     stageBg: '#f1f5f9',
-    gridMajor: '#b6c3d2',
-    gridMinor: '#d4dde7',
-    axis: '#9fb1c2',
+    gridMajor: '#d2dbe6',
+    gridMinor: '#e6ecf3',
+    axis: '#c3cedb',
     // walls
     wallBody: '#d6dde6',
     wallBodySel: '#bfe9e3',
@@ -32,9 +32,9 @@ export const CANVAS_THEME = {
   },
   dark: {
     stageBg: '#0b1220',
-    gridMajor: '#1e2c3f',
-    gridMinor: '#152233',
-    axis: '#33455e',
+    gridMajor: '#18222f',
+    gridMinor: '#111b27',
+    axis: '#2a3a50',
     wallBody: '#33425a',
     wallBodySel: '#155e57',
     wallLine: '#cbd5e1',
