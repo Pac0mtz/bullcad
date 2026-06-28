@@ -17,7 +17,7 @@ function Swatches({ value, options, onPick }) {
     </div>
   );
 }
-import { IconDoor, IconWindow, IconOpening, IconGate, IconWall, IconRoom, IconMeasure, IconSelect, IconPan, IconFence, IconZoomIn, IconLabel, IconStairs } from './Icons.jsx';
+import { IconDoor, IconWindow, IconOpening, IconGate, IconWall, IconRoom, IconMeasure, IconSelect, IconPan, IconFence, IconZoomIn, IconLabel, IconStairs, IconPencil } from './Icons.jsx';
 import { STAIR_TYPES, STAIR_TYPE_ORDER } from '../utils/geometry.js';
 
 // Dropdown of wall-thickness presets; falls back to "Custom" for off-preset values.
@@ -74,6 +74,7 @@ export default function LeftPanel({ onCollapse }) {
             { id: 'select', label: 'Select', sub: 'edit / move', Icon: IconSelect, k: 'V' },
             { id: 'pan', label: 'Pan', sub: 'drag canvas', Icon: IconPan, k: 'H' },
             { id: 'wall', label: 'Wall', sub: 'click to chain', Icon: IconWall, k: 'W' },
+            { id: 'pencil', label: 'Sketch', sub: 'freehand → walls', Icon: IconPencil, k: 'K' },
             { id: 'room', label: 'Room', sub: '4-wall box', Icon: IconRoom, k: 'R' },
             { id: 'door', label: 'Door', sub: 'cuts wall', Icon: IconDoor, k: 'D' },
             { id: 'window', label: 'Window', sub: 'on wall', Icon: IconWindow, k: 'I' },

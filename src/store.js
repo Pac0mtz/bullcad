@@ -216,6 +216,15 @@ export const useStore = create((set, get) => ({
     return id;
   },
 
+  // add many walls in one history step — used by the freehand "Sketch → Straighten"
+  // flow so the whole traced run is a single undo.
+  addWallSegments: (segs) => {
+    if (!segs || !segs.length) return;
+    get().commit((s) => ({
+      walls: [...s.walls, ...segs.map(({ a, b }) => ({ id: uid('wall'), a, b, thickness: s.wallThickness, color: s.wallColor, height: s.wallHeight, material: s.wallMaterial }))],
+    }));
+  },
+
   // split a wall into two halves at its midpoint, re-homing any openings
   splitWall: (id) => get().commit((s) => {
     const w = s.walls.find((x) => x.id === id);

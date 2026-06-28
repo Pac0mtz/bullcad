@@ -516,6 +516,12 @@ button:focus-visible,
   background: var(--orange, #f97316); color: #fff; font-weight: 700; cursor: pointer;
 }
 .draw-toolbar .dt-exit:hover { filter: brightness(1.06); }
+.draw-toolbar .dt-clear {
+  border: none; border-radius: 8px; padding: 6px 12px;
+  background: rgba(255,255,255,0.14); color: #fff; font-weight: 700; cursor: pointer;
+}
+.draw-toolbar .dt-clear:hover { background: rgba(255,255,255,0.24); }
+.draw-toolbar .dt-clear:disabled, .draw-toolbar .dt-exit:disabled { opacity: 0.45; cursor: default; }
 
 /* mobile guided wall-draw modal (bottom sheet) */
 .mdraw-modal {

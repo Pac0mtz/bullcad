@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer, Line, Circle, Text, Group, Rect, Shape } from 'react-konva';
 import { useStore } from '../store.js';
 import {
-  dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, wallPolygons, stairGeometry, snapAngle, detectRooms, roomWalls, roomSignature, parseLength,
+  dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, wallPolygons, stairGeometry, snapAngle, detectRooms, roomWalls, roomSignature, parseLength, simplifyPath,
 } from '../utils/geometry.js';
 
 const FENCE_THICK = 0.3; // nominal fence body width (ft) for alignment offset
@@ -53,6 +53,10 @@ export default function Canvas2D() {
   const [guides, setGuides] = useState([]); // alignment guide lines (feet) while dragging
   const [marquee, setMarquee] = useState(null); // {x0,y0,x1,y1} feet — rubber-band box (zoom or select)
   const [mDraw, setMDraw] = useState(null); // mobile guided wall draw: { phase:'idle'|'placing', anchor, pointer, start }
+  // freehand "Sketch" tool: completed ink strokes + the one being drawn (feet pts)
+  const [sketch, setSketch] = useState([]); // array of strokes; each is [{x,y}]
+  const [liveStroke, setLiveStroke] = useState(null); // current stroke points
+  const liveRef = useRef([]); // accumulator for the active stroke
   const drag = useRef(null); // active handle drag
   const runPath = useRef([]); // points clicked in the current wall run (for the room-area label)
   const marq = useRef(null);  // active marquee drag
@@ -65,6 +69,7 @@ export default function Canvas2D() {
   // mirror view/size into refs so the window mouseup listener (bound once) can read them
   const viewRef = useRef(view); viewRef.current = view;
   const sizeRef = useRef(size); sizeRef.current = size;
+  const scaleRef = useRef(scale); scaleRef.current = scale;
 
   // Adaptive grid: subdivide the 1-ft grid into 6"/3"/1" cells as you zoom in, so
   // the grid (and snapping) work at inch precision. `minorStep` is in feet.
@@ -138,6 +143,73 @@ export default function Canvas2D() {
 
   // reset draft/measure when tool changes
   useEffect(() => { setDraft(null); setRunStart(null); setMeasure([]); setLenStr(''); }, [tool]);
+  // leaving the Sketch tool discards any un-straightened ink
+  useEffect(() => { if (tool !== 'pencil') { setSketch([]); setLiveStroke(null); liveRef.current = []; } }, [tool]);
+
+  // ---- freehand Sketch capture (Apple Pencil / mouse draws; finger pans) ----
+  // Uses raw PointerEvents so we can tell a pen/mouse (draw) from touch (ignore,
+  // so the existing single-finger pan + pinch keep working = palm rejection).
+  useEffect(() => {
+    if (tool !== 'pencil') return;
+    const container = stageRef.current?.container();
+    if (!container) return;
+    const toFeet = (clientX, clientY) => {
+      const r = container.getBoundingClientRect();
+      const v = viewRef.current, sc = scaleRef.current;
+      return { x: ((clientX - r.left) - v.x) / (v.k * sc), y: ((clientY - r.top) - v.y) / (v.k * sc) };
+    };
+    let drawing = false;
+    const down = (e) => {
+      if (e.pointerType === 'touch') return; // finger/palm → leave it to pan/pinch
+      e.preventDefault();
+      drawing = true;
+      liveRef.current = [toFeet(e.clientX, e.clientY)];
+      setLiveStroke([...liveRef.current]);
+      try { container.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    };
+    const move = (e) => {
+      if (!drawing || e.pointerType === 'touch') return;
+      const p = toFeet(e.clientX, e.clientY);
+      const last = liveRef.current[liveRef.current.length - 1];
+      if (!last || Math.hypot(p.x - last.x, p.y - last.y) > 0.1) {
+        liveRef.current.push(p);
+        setLiveStroke([...liveRef.current]);
+      }
+    };
+    const up = () => {
+      if (!drawing) return;
+      drawing = false;
+      const pts = liveRef.current;
+      if (pts.length >= 2) setSketch((s) => [...s, pts]);
+      liveRef.current = [];
+      setLiveStroke(null);
+    };
+    container.addEventListener('pointerdown', down);
+    container.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    container.style.cursor = 'crosshair';
+    return () => {
+      container.removeEventListener('pointerdown', down);
+      container.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      container.style.cursor = '';
+    };
+  }, [tool]);
+
+  // turn the sketched ink into clean wall segments (one undo step), then exit
+  const straightenSketch = () => {
+    const strokes = [...sketch, ...(liveRef.current.length >= 2 ? [liveRef.current] : [])];
+    const segs = [];
+    for (const pts of strokes) {
+      if (!pts || pts.length < 2) continue;
+      let v = simplifyPath(pts, 0.6).map((p) => (snapEnabled ? snapPt(p, minorStep) : p));
+      if (v.length > 2 && dist(v[0], v[v.length - 1]) < 1.5) v[v.length - 1] = { ...v[0] }; // close the loop
+      for (let i = 0; i < v.length - 1; i++) if (dist(v[i], v[i + 1]) > 0.3) segs.push({ a: { x: v[i].x, y: v[i].y }, b: { x: v[i + 1].x, y: v[i + 1].y } });
+    }
+    setSketch([]); setLiveStroke(null); liveRef.current = [];
+    if (segs.length) { store.addWallSegments(segs); store.setTool('select'); }
+  };
+  const clearSketch = () => { setSketch([]); setLiveStroke(null); liveRef.current = []; };
 
   // finish the current wall/fence run; `toSelect` also drops back to the Select tool
   const finishRun = (toSelect) => { setDraft(null); setRunStart(null); setLenStr(''); setGuides([]); runPath.current = []; if (toSelect) store.setTool('select'); };
@@ -1165,6 +1237,17 @@ export default function Canvas2D() {
             </Group>
           )}
 
+          {/* freehand sketch ink (Sketch tool) — rough strokes until "Straighten" */}
+          {(sketch.length > 0 || liveStroke) && (
+            <Group listening={false}>
+              {[...sketch, ...(liveStroke ? [liveStroke] : [])].map((pts, i) => (
+                <Line key={i} points={pts.flatMap((p) => [p.x * scale, p.y * scale])}
+                  stroke="#6366f1" strokeWidth={2.5 / view.k} opacity={0.85}
+                  tension={0.4} lineCap="round" lineJoin="round" />
+              ))}
+            </Group>
+          )}
+
           {/* draft preview */}
           {showDraftPreview && (() => {
             const isWall = tool === 'wall';
@@ -1369,6 +1452,18 @@ export default function Canvas2D() {
       {tool === 'room' && !draft && (
         <div className="draw-hint">{coarse ? 'Tap one corner, then the opposite' : 'Click one corner, then the opposite'}</div>
       )}
+
+      {/* Sketch tool HUD — freehand then convert */}
+      {tool === 'pencil' && (() => {
+        const has = sketch.length > 0 || (liveStroke && liveStroke.length > 1);
+        return (
+          <div className="draw-toolbar">
+            <span className="dt-hint">{has ? 'Sketch more, or straighten to walls' : `Sketch walls freehand with ${coarse ? 'your pencil' : 'the mouse'} · finger pans`}</span>
+            <button className="dt-clear" onClick={clearSketch} disabled={!has}>Clear</button>
+            <button className="dt-exit" onClick={straightenSketch} disabled={!has}>Straighten</button>
+          </div>
+        );
+      })()}
 
       {/* wall/fence drawing toolbar — live thickness + Exit Drawing (magicplan-style) */}
       {(tool === 'wall' || tool === 'fence') && (

@@ -6,6 +6,35 @@ export const uid = (p = 'id') =>
 
 export const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
 
+// Ramer–Douglas–Peucker: thin a freehand point list down to the corners that
+// matter, within `tol` (feet) of the original path. Used to turn a sketched
+// stroke into a small set of straight wall segments.
+export function simplifyPath(points, tol = 0.5) {
+  if (!points || points.length < 3) return points ? points.slice() : [];
+  const sqTol = tol * tol;
+  const sqSegDist = (p, a, b) => {
+    let x = a.x, y = a.y, dx = b.x - x, dy = b.y - y;
+    if (dx || dy) {
+      const t = ((p.x - x) * dx + (p.y - y) * dy) / (dx * dx + dy * dy);
+      if (t > 1) { x = b.x; y = b.y; } else if (t > 0) { x += dx * t; y += dy * t; }
+    }
+    dx = p.x - x; dy = p.y - y;
+    return dx * dx + dy * dy;
+  };
+  const out = [points[0]];
+  const dp = (first, last) => {
+    let maxD = sqTol, idx = -1;
+    for (let i = first + 1; i < last; i++) {
+      const d = sqSegDist(points[i], points[first], points[last]);
+      if (d > maxD) { idx = i; maxD = d; }
+    }
+    if (idx > -1) { dp(first, idx); out.push(points[idx]); dp(idx, last); }
+  };
+  dp(0, points.length - 1);
+  out.push(points[points.length - 1]);
+  return out;
+}
+
 export const lerp = (a, b, t) => ({
   x: a.x + (b.x - a.x) * t,
   y: a.y + (b.y - a.y) * t,

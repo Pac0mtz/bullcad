@@ -62,7 +62,7 @@ export default function App() {
         }
       } else {
         // single-letter tool shortcuts (shown as badges on the tool tiles)
-        const keyMap = { v: 'select', h: 'pan', w: 'wall', r: 'room', d: 'door', i: 'window', o: 'opening', f: 'fence', g: 'gate', p: 'post', m: 'measure', s: 'stairs', l: 'label', z: 'zoom' };
+        const keyMap = { v: 'select', h: 'pan', w: 'wall', k: 'pencil', r: 'room', d: 'door', i: 'window', o: 'opening', f: 'fence', g: 'gate', p: 'post', m: 'measure', s: 'stairs', l: 'label', z: 'zoom' };
         const t = keyMap[e.key.toLowerCase()];
         if (t) setTool(t);
       }
