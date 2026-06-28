@@ -138,7 +138,7 @@ export function WallShape({ wall, scale, selected, onSelect, palette = DEFAULT_P
     const pts = poly.points.flatMap((p) => [p.x * scale, p.y * scale]);
     return (
       <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)}>
-        <Line points={pts} closed fill={fill} stroke={fill} strokeWidth={0.6} lineJoin="round" />
+        <Line points={pts} closed fill={fill} stroke={fill} strokeWidth={0.6} lineJoin="round" perfectDrawEnabled={false} shadowForStrokeEnabled={false} />
       </Group>
     );
   }

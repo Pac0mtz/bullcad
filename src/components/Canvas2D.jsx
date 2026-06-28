@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Stage, Layer, Line, Circle, Text, Group, Rect } from 'react-konva';
+import { Stage, Layer, Line, Circle, Text, Group, Rect, Shape } from 'react-konva';
 import { useStore } from '../store.js';
 import {
   dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, wallPolygons, stairGeometry, snapAngle, detectRooms, roomWalls, roomSignature, parseLength,
@@ -665,32 +665,33 @@ export default function Canvas2D() {
   useEffect(() => { if (!didFit.current && size.w > 100) { didFit.current = true; setTimeout(fitView, 0); } }, [size.w]);
 
   // ---------------- grid lines ----------------
-  const gridLines = useMemo(() => {
-    const lines = [];
+  // Grid drawn as ONE Konva Shape (a single canvas pass, batched by line type)
+  // instead of hundreds of <Line> nodes — keeps pan/zoom smooth since React only
+  // reconciles one node and the redraw is a few strokes, not 300+ shapes.
+  const gridShape = useMemo(() => {
     const pxPerFt = scale * view.k;
-    // only build lines across the visible viewport (+ margin) so the fine inch
-    // grid stays cheap when zoomed in
-    const m = 2; // ft margin
+    const m = 2; // ft margin past the viewport
     const left = Math.floor((-view.x) / pxPerFt) - m, right = Math.ceil((size.w - view.x) / pxPerFt) + m;
     const top = Math.floor((-view.y) / pxPerFt) - m, bottom = Math.ceil((size.h - view.y) / pxPerFt) + m;
     const isMul = (v, k) => Math.abs(v / k - Math.round(v / k)) < 1e-4;
-    const stroke = (onFoot, onFive) => onFive ? t.gridMajor : onFoot ? t.gridMajor : t.gridMinor;
-    const width = (onFoot, onFive) => onFive ? 1.2 : onFoot ? 0.9 : 0.5; // screen px (strokeScaleEnabled off)
     const x0 = Math.floor(left / minorStep) * minorStep, y0 = Math.floor(top / minorStep) * minorStep;
-    for (let x = x0; x <= right + 1e-6; x += minorStep) {
-      const f = isMul(x, 1), f5 = isMul(x, 5);
-      lines.push(<Line key={'v' + x.toFixed(3)} points={[x * scale, top * scale, x * scale, bottom * scale]}
-        stroke={stroke(f, f5)} strokeWidth={width(f, f5)} opacity={f ? 1 : 0.6} strokeScaleEnabled={false} />);
-    }
-    for (let y = y0; y <= bottom + 1e-6; y += minorStep) {
-      const f = isMul(y, 1), f5 = isMul(y, 5);
-      lines.push(<Line key={'h' + y.toFixed(3)} points={[left * scale, y * scale, right * scale, y * scale]}
-        stroke={stroke(f, f5)} strokeWidth={width(f, f5)} opacity={f ? 1 : 0.6} strokeScaleEnabled={false} />);
-    }
-    // axes
-    lines.push(<Line key="ax" points={[left * scale, 0, right * scale, 0]} stroke={t.axis} strokeWidth={1.4} strokeScaleEnabled={false} />);
-    lines.push(<Line key="ay" points={[0, top * scale, 0, bottom * scale]} stroke={t.axis} strokeWidth={1.4} strokeScaleEnabled={false} />);
-    return lines;
+    const minorV = [], footV = [], fiveV = [], minorH = [], footH = [], fiveH = [];
+    for (let x = x0; x <= right + 1e-6; x += minorStep) { const c = x * scale; (isMul(x, 5) ? fiveV : isMul(x, 1) ? footV : minorV).push(c); }
+    for (let y = y0; y <= bottom + 1e-6; y += minorStep) { const c = y * scale; (isMul(y, 5) ? fiveH : isMul(y, 1) ? footH : minorH).push(c); }
+    const T = top * scale, B = bottom * scale, Lx = left * scale, Rx = right * scale;
+    return (
+      <Shape listening={false} perfectDrawEnabled={false} sceneFunc={(ctx) => {
+        const k = view.k || 1; // counter the stage scale so widths stay screen-px
+        const drawV = (xs, color, w, a) => { if (!xs.length) return; ctx.beginPath(); for (const x of xs) { ctx.moveTo(x, T); ctx.lineTo(x, B); } ctx.strokeStyle = color; ctx.lineWidth = w / k; ctx.globalAlpha = a; ctx.stroke(); };
+        const drawH = (ys, color, w, a) => { if (!ys.length) return; ctx.beginPath(); for (const y of ys) { ctx.moveTo(Lx, y); ctx.lineTo(Rx, y); } ctx.strokeStyle = color; ctx.lineWidth = w / k; ctx.globalAlpha = a; ctx.stroke(); };
+        drawV(minorV, t.gridMinor, 0.5, 0.6); drawH(minorH, t.gridMinor, 0.5, 0.6);
+        drawV(footV, t.gridMajor, 0.9, 1); drawH(footH, t.gridMajor, 0.9, 1);
+        drawV(fiveV, t.gridMajor, 1.2, 1); drawH(fiveH, t.gridMajor, 1.2, 1);
+        ctx.strokeStyle = t.axis; ctx.lineWidth = 1.4 / k; ctx.globalAlpha = 1;
+        ctx.beginPath(); ctx.moveTo(Lx, 0); ctx.lineTo(Rx, 0); ctx.moveTo(0, T); ctx.lineTo(0, B); ctx.stroke();
+        ctx.globalAlpha = 1;
+      }} />
+    );
   }, [minorStep, scale, t, view, size]);
 
   const cursorPx = cursor ? { x: cursor.x * scale, y: cursor.y * scale } : null;
@@ -800,7 +801,7 @@ export default function Canvas2D() {
       >
         <Layer ref={layerRef} listening={true}>
           {/* grid */}
-          <Group listening={false}>{gridLines}</Group>
+          <Group listening={false}>{gridShape}</Group>
 
           {/* room floors: a solid fill inside every closed wall loop, drawn under
               the walls so the wall poché trims it to the interior faces. Click to
