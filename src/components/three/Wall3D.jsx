@@ -182,7 +182,7 @@ function Door3D({ o, th, selected, onSelect }) {
 
 // Build solid spans of a wall, skipping opening gaps; add headers + fixtures.
 // Wall-local frame: x runs 0..L along the wall, y up, z = thickness.
-export default function Wall3D({ wall, openings, wallHeight, outward = 1, seg = null, selection, onSelect }) {
+export default function Wall3D({ wall, openings, wallHeight, outward = 1, seg = null, selection, onSelect, onWallBody = null }) {
   // `seg` carries the justified, miter-joined endpoints (matching the 2D plan)
   // plus a flag per end telling us whether it meets a neighbour at a corner.
   const a = seg?.a || wall.a, b = seg?.b || wall.b;
@@ -230,7 +230,9 @@ export default function Wall3D({ wall, openings, wallHeight, outward = 1, seg = 
 
   const wallSelected = selection?.type === 'wall' && selection.id === wall.id;
   const selOpId = selection?.type === 'opening' ? selection.id : null;
-  const selectWall = (e) => { e.stopPropagation(); onSelect?.({ type: 'wall', id: wall.id }); };
+  // in "add opening" mode, clicking the wall body drops a door/window where you
+  // clicked (onWallBody handles it); otherwise the click just selects the wall.
+  const selectWall = (e) => { e.stopPropagation(); if (onWallBody) onWallBody(e); else onSelect?.({ type: 'wall', id: wall.id }); };
   const selectOpening = (id) => onSelect?.({ type: 'opening', id });
 
   return (

@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, Environment, ContactShadows } from '@react-three/drei';
 import { useStore } from '../store.js';
@@ -10,6 +10,7 @@ const FENCE_THICK = 0.3;
 import Wall3D from './three/Wall3D.jsx';
 import Stair3D from './three/Stair3D.jsx';
 import Fence3D from './three/Fence3D.jsx';
+import Edit3D from './three/Edit3D.jsx';
 
 // Compute the plan center + extent so we can frame the camera nicely.
 function useBounds(walls, fences) {
@@ -41,6 +42,9 @@ export default function Scene3D() {
   const selection = useStore((s) => s.selection);
   const select = useStore((s) => s.select);
   const clearSelection = useStore((s) => s.clearSelection);
+  const addOpening = useStore((s) => s.addOpening);
+  // null = edit/select mode; 'door' | 'window' = click a wall face to add one
+  const [addMode, setAddMode] = useState(null);
   const wallJustify = useStore((s) => s.wallJustify);
   const fenceJustify = useStore((s) => s.fenceJustify);
   const sky = SCENE_THEME[theme] || SCENE_THEME.light;
@@ -132,7 +136,15 @@ export default function Scene3D() {
         {layers.walls && walls.map((w) => (
           <Wall3D key={w.id} wall={w} openings={layers.openings ? (openingsByWall[w.id] || []) : []} wallHeight={w.height ?? wallHeight}
             outward={outwardOf(w)} seg={wallSegs.get(w.id)}
-            selection={selection} onSelect={select} />
+            selection={selection} onSelect={select}
+            onWallBody={addMode ? (e) => {
+              e.stopPropagation();
+              const P = e.point; // world (x, z); z maps to plan y
+              const vx = w.b.x - w.a.x, vy = w.b.y - w.a.y, L2 = vx * vx + vy * vy || 1;
+              let t = ((P.x - w.a.x) * vx + (P.z - w.a.y) * vy) / L2;
+              t = Math.max(0.06, Math.min(0.94, t));
+              addOpening(w.id, addMode, t);
+            } : null} />
         ))}
         {/* fences */}
         {layers.fences && fences.map((f) => (
@@ -146,6 +158,10 @@ export default function Scene3D() {
           <Stair3D key={stp.id} stair={stp} selection={selection} onSelect={select} />
         ))}
 
+        {/* direct-manipulation gizmos for the current selection (move/rotate/height);
+            hidden while placing openings so the handles don't intercept wall clicks */}
+        {!addMode && <Edit3D />}
+
         <ContactShadows position={[cx, 0.01, cz]} scale={span * 3 + 40} blur={2} opacity={0.35} far={40} />
 
         <OrbitControls
@@ -158,7 +174,18 @@ export default function Scene3D() {
         />
       </Canvas>
 
-      <div className="hint">Click any element to edit · drag to orbit · right-drag to pan · scroll to zoom</div>
+      {/* 3D edit toolbar: select/move vs. place doors/windows */}
+      <div className="edit3d-bar">
+        <button className={addMode === null ? 'active' : ''} onClick={() => setAddMode(null)} title="Select & move (drag the handles)">Edit</button>
+        <button className={addMode === 'door' ? 'active' : ''} onClick={() => setAddMode((m) => (m === 'door' ? null : 'door'))} title="Click a wall to add a door">+ Door</button>
+        <button className={addMode === 'window' ? 'active' : ''} onClick={() => setAddMode((m) => (m === 'window' ? null : 'window'))} title="Click a wall to add a window">+ Window</button>
+      </div>
+
+      <div className="hint">
+        {addMode
+          ? `Click a wall to place a ${addMode} · pick Edit to stop`
+          : 'Click to select · drag the disc to move, ring to rotate, cone to raise · right-drag to pan'}
+      </div>
     </div>
   );
 }

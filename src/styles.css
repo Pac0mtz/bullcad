@@ -926,3 +926,17 @@ kbd {
 .ai-attach-x:hover { background: var(--slate-200); color: var(--text); }
 
 .ai-msg-img { display: block; max-width: 100%; max-height: 160px; border-radius: 8px; margin-bottom: 6px; }
+
+/* 3D direct-edit toolbar (top-left of the 3D view) */
+.edit3d-bar {
+  position: absolute; top: 14px; left: 14px; z-index: 11;
+  display: flex; gap: 4px; padding: 4px;
+  background: rgba(10,37,64,0.92); border-radius: 11px; box-shadow: var(--shadow-lg);
+}
+.edit3d-bar button {
+  border: none; border-radius: 8px; padding: 7px 12px; cursor: pointer;
+  background: transparent; color: #cdd9e5; font-weight: 700; font-size: 12.5px; white-space: nowrap;
+}
+.edit3d-bar button:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.edit3d-bar button.active { background: var(--teal); color: #03201c; }
+@media (max-width: 700px) { .edit3d-bar { top: 10px; left: 10px; } }
