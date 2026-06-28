@@ -60,7 +60,7 @@ function serializeProject(s) {
     id: p.id, name: p.name,
     geom: p.id === s.activePage ? geomOf(s) : (s.pageStore[p.id] || emptyGeom()),
   }));
-  return { v: 1, pages, activePage: s.activePage, settings: { scale: s.scale, grid: s.grid, dimMode: s.dimMode, wallJustify: s.wallJustify } };
+  return { v: 1, pages, activePage: s.activePage, settings: { scale: s.scale, grid: s.grid, dimMode: s.dimMode, wallJustify: s.wallJustify, roomLabelSize: s.roomLabelSize } };
 }
 function loadPersisted() {
   try {
@@ -102,6 +102,7 @@ export const useStore = create((set, get) => ({
   wallMaterial: 'drywall',
   detachCorner: false, // when on, dragging a corner moves only that wall (split the joint); Alt does this momentarily
   showRoomAreas: true, // overlay the numeric room-area label on each closed room
+  roomLabelSize: _initSettings.roomLabelSize ?? 11, // room name/area font size (px on screen, scaled in the PDF)
 
   // ----- layer visibility (view state, not part of undo history) -----
   layers: { walls: true, openings: true, fences: true, gates: true, stairs: true, labels: true, dims: true },
@@ -375,6 +376,24 @@ export const useStore = create((set, get) => ({
       if (type === 'fence') { out.gates = s.gates.filter((g) => g.fenceId !== id); out.posts = s.posts.filter((p) => p.fenceId !== id); }
       return out;
     }),
+
+  // duplicate one element; the copy is offset a little and becomes the selection
+  // so you can immediately drag it. Walls/fences/stairs shift by 2 ft; openings
+  // and gates copy onto the same host, nudged along it.
+  duplicateElement: (type, id) => {
+    const key = type + 's';
+    const el = (get()[key] || []).find((e) => e.id === id);
+    if (!el) return null;
+    const nid = uid(type);
+    const clone = { ...JSON.parse(JSON.stringify(el)), id: nid };
+    if (el.a && el.b) { clone.a = { x: el.a.x + 2, y: el.a.y + 2 }; clone.b = { x: el.b.x + 2, y: el.b.y + 2 }; }
+    if (el.t != null) clone.t = Math.min(0.92, Math.max(0.08, el.t + 0.12));
+    if (el.x != null && el.y != null) { clone.x = el.x + 2; clone.y = el.y + 2; }
+    if (el.pos && el.anchor) { clone.pos = { x: el.pos.x + 2, y: el.pos.y + 2 }; clone.anchor = { x: el.anchor.x + 2, y: el.anchor.y + 2 }; }
+    get().commit((s) => ({ [key]: [...s[key], clone] }));
+    set({ selection: { type, id: nid }, multi: [{ type, id: nid }] });
+    return nid;
+  },
 
   // delete the whole marquee group (or the single selection)
   deleteSelected: () => {

@@ -8,7 +8,7 @@ import {
 const FENCE_THICK = 0.3; // nominal fence body width (ft) for alignment offset
 import { CANVAS_THEME } from '../utils/theme.js';
 import { WallShape, OpeningShape, FenceShape, GateShape, PostShape, DimLabel, WallDimension, WallOpeningDims, LabelShape, StairShape } from './canvas/Shapes.jsx';
-import { IconZoomIn, IconZoomOut, IconFit, IconTrash } from './Icons.jsx';
+import { IconZoomIn, IconZoomOut, IconFit, IconTrash, IconDuplicate } from './Icons.jsx';
 import Compass from './Compass.jsx';
 
 const NAVY = '#0a2540';
@@ -21,7 +21,7 @@ export default function Canvas2D() {
   const layerRef = useRef(null);
 
   const store = useStore();
-  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, posts, labels, stairs, selection, multi, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, layers, detachCorner, roomNames, roomLabelPos } = store;
+  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, posts, labels, stairs, selection, multi, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, roomLabelSize, layers, detachCorner, roomNames, roomLabelPos } = store;
   // closed wall loops → rooms. Always detected so the interior gets a white
   // floor; the `showRoomAreas` toggle only governs the numeric area label.
   // Each room carries its bounding-wall ids, a stable signature, its name, and
@@ -1109,10 +1109,10 @@ export default function Canvas2D() {
                   onMouseEnter={setCur('pointer')} onMouseLeave={setCur('')}>
                   <Rect x={-hitW / 2} y={hitTop} width={hitW} height={hitH} fill="rgba(0,0,0,0.001)" />
                   {rm.name && (
-                    <Text x={-W / 2} y={nameY} width={W} align="center" text={rm.name} fontSize={14} fontFamily="Poppins" fontStyle="600" fill={t.roomText} listening={false} />
+                    <Text x={-W / 2} y={nameY} width={W} align="center" text={rm.name} fontSize={roomLabelSize || 11} fontFamily="Poppins" fontStyle="600" fill={t.roomText} listening={false} />
                   )}
                   {showRoomAreas && (
-                    <Text x={-W / 2} y={rm.name ? 2 : -7} width={W} align="center" text={area} fontSize={12} fontFamily="Poppins" fontStyle="400" fill={t.roomText} listening={false} />
+                    <Text x={-W / 2} y={rm.name ? 2 : -7} width={W} align="center" text={area} fontSize={Math.max(8, (roomLabelSize || 11) - 1)} fontFamily="Poppins" fontStyle="400" fill={t.roomText} listening={false} />
                   )}
                 </Group>
                 {selRoom && (
@@ -1325,7 +1325,42 @@ export default function Canvas2D() {
               <span className="wq-val">{Number.isInteger(inch) ? inch : inch.toFixed(1)}″</span>
               <button onMouseDown={stop(() => stepT(0.5))} aria-label="Thicker">+</button>
             </div>
+            <button className="wq-dup" onMouseDown={stop(() => store.duplicateElement('wall', selWall.id))} aria-label="Duplicate wall"><IconDuplicate style={{ width: 15, height: 15 }} /></button>
             <button className="wq-del" onMouseDown={stop(() => store.deleteSelected())} aria-label="Delete wall"><IconTrash style={{ width: 15, height: 15 }} /></button>
+          </div>
+        );
+      })()}
+
+      {/* selected door/window/opening quick actions — same pill layout as walls:
+          step the width, duplicate, or delete without opening the panel */}
+      {selOpening && tool === 'select' && (() => {
+        const host = walls.find((w) => w.id === selOpening.wallId);
+        if (!host) return null;
+        const seg = wallSegs.get(host.id);
+        const a = seg?.a || host.a, b = seg?.b || host.b;
+        const mid = lerp(a, b, selOpening.t);
+        const L = dist(a, b) || 1;
+        let nx = -(b.y - a.y) / L, ny = (b.x - a.x) / L;
+        if (ny < 0) { nx = -nx; ny = -ny; }
+        const band = (host.thickness || 0.5) * scale * view.k;
+        const off = band * 0.5 + (coarse ? 44 : 34);
+        const px = view.x + mid.x * scale * view.k + nx * off;
+        const py = view.y + mid.y * scale * view.k + ny * off;
+        const cx = Math.max(86, Math.min(size.w - 86, px));
+        const cy = Math.max(26, Math.min(size.h - 26, py));
+        const inch = Math.round(selOpening.width * 12);
+        const stepW = (d) => store.updateElement('opening', selOpening.id, { width: Math.max(6, Math.min(144, inch + d)) / 12 }, true);
+        const stop = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); fn(); };
+        return (
+          <div className="wall-quick" style={{ left: cx, top: cy }}
+            onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+            <div className="wq-thick">
+              <button onMouseDown={stop(() => stepW(-2))} aria-label="Narrower">−</button>
+              <span className="wq-val">{inch}″</span>
+              <button onMouseDown={stop(() => stepW(2))} aria-label="Wider">+</button>
+            </div>
+            <button className="wq-dup" onMouseDown={stop(() => store.duplicateElement('opening', selOpening.id))} aria-label={`Duplicate ${selOpening.type}`}><IconDuplicate style={{ width: 15, height: 15 }} /></button>
+            <button className="wq-del" onMouseDown={stop(() => store.deleteSelected())} aria-label={`Delete ${selOpening.type}`}><IconTrash style={{ width: 15, height: 15 }} /></button>
           </div>
         );
       })()}

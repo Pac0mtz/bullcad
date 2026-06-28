@@ -278,14 +278,17 @@ export function buildPlanSvg(model, opts = {}) {
   const roomLabel = (x, y, text, fs, bold) => {
     const attrs = `x="${r2(x)}" y="${r2(y)}" font-size="${fs}" font-family="Poppins, Helvetica, Arial, sans-serif" font-weight="${bold ? 'bold' : '400'}" text-anchor="middle"`;
     return `<text ${attrs} fill="none" stroke="#ffffff" stroke-width="${r2(fs * 0.32)}" stroke-linejoin="round">${text}</text>`
-      + `<text ${attrs} fill="#0f172a">${text}</text>`;
+      + `<text ${attrs} fill="#64748b">${text}</text>`;
   };
+  // scale the PDF room-label points off the on-screen size (default 11px → ~7.9pt
+  // name / 7.2pt area), so changing "Label size" in the app carries into the PDF.
+  const rls = opts.roomLabelSize || 11;
   detectRooms(walls).forEach((rm) => {
     const name = roomNames[roomSignature(roomWalls(rm, walls))] || '';
     const showArea = opts.showRoomAreas !== false;
     if (!name && !showArea) return;
     const cx = rm.centroid.x, cy = rm.centroid.y;
-    const nameFs = ptFt(10), areaFs = ptFt(8.5); // room labels in real points too
+    const nameFs = ptFt(10 * rls / 14), areaFs = ptFt(8.5 * rls / 14); // room labels in real points too
     if (name) el.push(roomLabel(cx, cy - (showArea ? areaFs * 0.75 : -areaFs * 0.35), escXml(name), nameFs, true));
     if (showArea) el.push(roomLabel(cx, cy + (name ? nameFs * 0.85 : areaFs * 0.35), `${Math.round(rm.area)} sq ft`, areaFs, false));
   });

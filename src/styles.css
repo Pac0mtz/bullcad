@@ -613,6 +613,12 @@ button:focus-visible,
   background: rgba(255,255,255,0.14); color: #fff; font-size: 16px; line-height: 1; cursor: pointer;
 }
 .wall-quick .wq-thick button:hover { background: rgba(255,255,255,0.24); }
+.wall-quick .wq-dup {
+  width: 26px; height: 26px; border: none; border-radius: 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.14); color: #fff; cursor: pointer;
+}
+.wall-quick .wq-dup:hover { background: rgba(255,255,255,0.26); }
 .wall-quick .wq-del {
   width: 26px; height: 26px; border: none; border-radius: 7px;
   display: inline-flex; align-items: center; justify-content: center;
@@ -621,7 +627,7 @@ button:focus-visible,
 .wall-quick .wq-del:hover { filter: brightness(1.08); }
 @media (pointer: coarse) {
   .wall-quick { gap: 10px; padding: 6px 8px; border-radius: 13px; }
-  .wall-quick .wq-thick button, .wall-quick .wq-del { width: 34px; height: 34px; font-size: 18px; }
+  .wall-quick .wq-thick button, .wall-quick .wq-del, .wall-quick .wq-dup { width: 34px; height: 34px; font-size: 18px; }
   .wall-quick .wq-val { min-width: 34px; font-size: 14px; }
 }
 

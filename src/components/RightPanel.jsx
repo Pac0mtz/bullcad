@@ -59,6 +59,8 @@ function RoomProps({ sig, area, wallCount }) {
   const stored = useStore((s) => (s.roomNames || {})[sig] || '');
   const setRoomName = useStore((s) => s.setRoomName);
   const del = useStore((s) => s.deleteSelected);
+  const labelSize = useStore((s) => s.roomLabelSize);
+  const setDefault = useStore((s) => s.setDefault);
   const [txt, setTxt] = useState(stored);
   return (
     <div>
@@ -69,6 +71,10 @@ function RoomProps({ sig, area, wallCount }) {
           onBlur={() => { if (txt !== stored) setRoomName(sig, txt); }}
           onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setTxt(stored); e.currentTarget.blur(); } }} />
       </div>
+      <Num label="Label size" suffix="px" step={1} min={8} max={28}
+        value={labelSize}
+        onChange={(v) => setDefault('roomLabelSize', Math.max(8, Math.min(28, Math.round(v))))} />
+      <p className="empty-note">Applies to every room label (name &amp; area), on screen and in the PDF.</p>
       <p className="empty-note">Area <b>{area} sq ft</b>{wallCount ? ` · ${wallCount} walls` : ''}. Drag the room floor on the canvas to move the whole room together.</p>
       <button className="btn danger del-btn" onClick={del}><IconTrash style={{ width: 16, height: 16 }} /> Delete room</button>
     </div>
