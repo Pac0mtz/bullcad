@@ -77,8 +77,8 @@ export function DimLabel({ a, b, scale, color = NAVY, off = 0.9, palette = DEFAU
   if (angle > 90 || angle < -90) angle += 180; // keep text upright
   return (
     <Group x={cx} y={cy} rotation={angle} scaleX={inv} scaleY={inv} listening={false}>
-      <Text x={-w / 2} y={-4.5} width={w} align="center" text={txt} fontSize={9.5}
-        fontStyle="600" fill={color} stroke={palette.opMask} strokeWidth={3} fillAfterStrokeEnabled lineJoin="round" />
+      <Text x={-w / 2} y={-4.5} width={w} align="center" text={txt} fontSize={9.5} fontFamily="Poppins"
+        fontStyle="500" fill={color} stroke={palette.opMask} strokeWidth={3} fillAfterStrokeEnabled lineJoin="round" />
     </Group>
   );
 }
@@ -110,7 +110,7 @@ export function WallDimension({ wall, kind, offset, centroid, justify = 'center'
         onMouseDown={onPillDown} onTouchStart={onPillDown}
         onMouseEnter={onPillDown && setCur('move')} onMouseLeave={onPillDown && setCur('')}>
         <Rect x={-w / 2} y={-6.5} width={w} height={13} fill="rgba(0,0,0,0.001)" />
-        <Text x={-w / 2} y={-4.5} width={w} align="center" text={g.label.text} fontSize={9.5} fontStyle="600" fill={color} listening={false} />
+        <Text x={-w / 2} y={-4.5} width={w} align="center" text={g.label.text} fontSize={9.5} fontFamily="Poppins" fontStyle="500" fill={color} listening={false} />
       </Group>
     </Group>
   );
@@ -145,7 +145,7 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
             onMouseDown={onPillDown} onTouchStart={onPillDown}
             onMouseEnter={onPillDown && setCur('move')} onMouseLeave={onPillDown && setCur('')}>
             <Rect x={-w / 2} y={-6} width={w} height={12} fill="rgba(0,0,0,0.001)" />
-            <Text x={-w / 2} y={-4.5} width={w} align="center" text={seg.label.text} fontSize={8.5} fontStyle="600" fill={color} listening={false} />
+            <Text x={-w / 2} y={-4.5} width={w} align="center" text={seg.label.text} fontSize={8.5} fontFamily="Poppins" fontStyle="500" fill={color} listening={false} />
           </Group>
         );
       })}

@@ -36,6 +36,14 @@ export default function Canvas2D() {
 
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [view, setView] = useState({ x: 120, y: 90, k: 1 });
+  // Konva paints text to a canvas, so a webfont that loads after first render
+  // would show the fallback until something redraws — force one redraw once
+  // Poppins is ready so dimension/room labels switch to it immediately.
+  const [, setFontReady] = useState(0);
+  useEffect(() => {
+    if (!document.fonts?.load) return;
+    document.fonts.load('600 14px Poppins').then(() => setFontReady((n) => n + 1)).catch(() => {});
+  }, []);
   const [cursor, setCursor] = useState(null); // feet pt under pointer (snapped)
   const [draft, setDraft] = useState(null); // feet pt: start of current wall/fence segment
   const [runStart, setRunStart] = useState(null); // first point of the current run (for closing the loop)
@@ -1095,10 +1103,10 @@ export default function Canvas2D() {
                   </Group>
                 )}
                 {rm.name && (
-                  <Text x={-W / 2} y={nameY} width={W} align="center" text={rm.name} fontSize={14} fontStyle="700" fill={t.roomText} listening={false} />
+                  <Text x={-W / 2} y={nameY} width={W} align="center" text={rm.name} fontSize={14} fontFamily="Poppins" fontStyle="600" fill={t.roomText} listening={false} />
                 )}
                 {showRoomAreas && (
-                  <Text x={-W / 2} y={rm.name ? 2 : -7} width={W} align="center" text={area} fontSize={12} fontStyle="600" fill={t.roomText} listening={false} />
+                  <Text x={-W / 2} y={rm.name ? 2 : -7} width={W} align="center" text={area} fontSize={12} fontFamily="Poppins" fontStyle="400" fill={t.roomText} listening={false} />
                 )}
               </Group>
             );

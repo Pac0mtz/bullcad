@@ -18,7 +18,7 @@ const r2 = (n) => Math.round(n * 1000) / 1000;
 function dimPill(x, y, angle, text, fs) {
   // text only — no pill box/border/halo. The dimension line is broken (or
   // omitted on tight runs) around the label, so nothing crosses the number.
-  const attrs = `x="0" y="${r2(fs * 0.33)}" font-size="${fs}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="600"`;
+  const attrs = `x="0" y="${r2(fs * 0.33)}" font-size="${fs}" text-anchor="middle" font-family="Poppins, Helvetica, Arial, sans-serif" font-weight="400"`;
   return `<g transform="translate(${r2(x)} ${r2(y)}) rotate(${r2(angle)})">`
     + `<text ${attrs} fill="${NAVY}">${text}</text>`
     + `</g>`;
@@ -276,7 +276,7 @@ export function buildPlanSvg(model, opts = {}) {
   // not a box) keeps it readable where it crosses dimension lines in tight rooms.
   const roomNames = model.roomNames || {};
   const roomLabel = (x, y, text, fs, bold) => {
-    const attrs = `x="${r2(x)}" y="${r2(y)}" font-size="${fs}" font-family="Helvetica, Arial, sans-serif" font-weight="${bold ? 'bold' : '600'}" text-anchor="middle"`;
+    const attrs = `x="${r2(x)}" y="${r2(y)}" font-size="${fs}" font-family="Poppins, Helvetica, Arial, sans-serif" font-weight="${bold ? 'bold' : '400'}" text-anchor="middle"`;
     return `<text ${attrs} fill="none" stroke="#ffffff" stroke-width="${r2(fs * 0.32)}" stroke-linejoin="round">${text}</text>`
       + `<text ${attrs} fill="#0f172a">${text}</text>`;
   };
@@ -464,6 +464,16 @@ export async function exportPlanPDF(model, opts = {}) {
   const orientation = opts.orientation || 'landscape';
   const format = opts.paper || 'letter';
   const doc = new jsPDF({ orientation, unit: 'pt', format });
+  // embed Poppins so the export renders in the same font as the app (lazy import
+  // keeps the ~420KB of font base64 out of the main bundle). Falls back to
+  // Helvetica if it can't load.
+  try {
+    const { POPPINS_REGULAR, POPPINS_SEMIBOLD } = await import('./fonts/poppins.js');
+    doc.addFileToVFS('Poppins-Regular.ttf', POPPINS_REGULAR);
+    doc.addFont('Poppins-Regular.ttf', 'Poppins', 'normal');
+    doc.addFileToVFS('Poppins-SemiBold.ttf', POPPINS_SEMIBOLD);
+    doc.addFont('Poppins-SemiBold.ttf', 'Poppins', 'bold');
+  } catch (e) { /* keep Helvetica */ }
   const PW = doc.internal.pageSize.getWidth();
   const PH = doc.internal.pageSize.getHeight();
   const M = 28;
