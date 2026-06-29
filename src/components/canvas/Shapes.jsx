@@ -285,7 +285,7 @@ export function FenceShape({ fence, scale, selected, hovered, onSelect, onHover,
     <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)} {...hov}>
       <Line points={pts} stroke={col} strokeWidth={selected ? 5 : 3.5} lineCap="round"
         dash={dash} hitStrokeWidth={14} />
-      {hovered && !selected && <Line points={pts} stroke={BLUE} strokeWidth={2} lineCap="round" opacity={0.6} />}
+      {hovered && !selected && <Line points={pts} stroke={BLUE} strokeWidth={3.5} lineCap="round" opacity={0.85} dash={dash} />}
       {selected && <Line points={pts} stroke={BLUE} strokeWidth={1.5} lineCap="round" dash={[6, 5]} />}
       {posts.map((p, i) => (
         <Rect key={i} x={p.x * scale - ps / 2} y={p.y * scale - ps / 2} width={ps} height={ps}
@@ -296,19 +296,24 @@ export function FenceShape({ fence, scale, selected, hovered, onSelect, onHover,
 }
 
 // ------------- POST (an individually placed fence post) -------------
-export function PostShape({ post, fence, scale, selected, onSelect, onDelete, palette = DEFAULT_PALETTE, seg = null, zoom = 1 }) {
+export function PostShape({ post, fence, scale, selected, hovered, onSelect, onHover, onDelete, palette = DEFAULT_PALETTE, seg = null, zoom = 1 }) {
   if (!fence) return null;
   const a = seg?.a || fence.a, b = seg?.b || fence.b;
   const c = lerp(a, b, post.t);
   const ps = Math.max(5, 0.55 * scale); // a touch larger than the auto posts so a placed post reads as deliberate
   const inv = 1 / (zoom || 1);
   const setCur = (cur) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = cur; };
+  const hi = selected || hovered;
+  const hov = onHover ? {
+    onMouseEnter: (e) => { onHover(post.id); const st = e.target.getStage(); if (st) st.container().style.cursor = 'pointer'; },
+    onMouseLeave: (e) => { onHover(null); const st = e.target.getStage(); if (st) st.container().style.cursor = ''; },
+  } : {};
   const moveArrows = [[0, -5, 0, 5], [-5, 0, 5, 0], [0, -5, -1.8, -2.9], [0, -5, 1.8, -2.9], [0, 5, -1.8, 2.9], [0, 5, 1.8, 2.9], [-5, 0, -2.9, -1.8], [-5, 0, -2.9, 1.8], [5, 0, 2.9, -1.8], [5, 0, 2.9, 1.8]];
   return (
     <Group>
-      <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)}>
+      <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)} {...hov}>
         <Rect x={c.x * scale - ps / 2} y={c.y * scale - ps / 2} width={ps} height={ps}
-          fill={post.color || palette.postFill} stroke={selected ? BLUE : '#0a2540'} strokeWidth={selected ? 2 : 0.75}
+          fill={post.color || palette.postFill} stroke={hi ? BLUE : '#0a2540'} strokeWidth={hi ? 2 : 0.75}
           cornerRadius={1} hitStrokeWidth={16} />
       </Group>
       {selected && (
@@ -331,7 +336,7 @@ export function PostShape({ post, fence, scale, selected, onSelect, onDelete, pa
 }
 
 // ---------------- GATE ----------------
-export function GateShape({ gate, fence, scale, selected, onSelect, palette = DEFAULT_PALETTE, seg = null, centroid = null }) {
+export function GateShape({ gate, fence, scale, selected, hovered, onSelect, onHover, palette = DEFAULT_PALETTE, seg = null, centroid = null }) {
   if (!fence) return null;
   const a = seg?.a || fence.a, b = seg?.b || fence.b;
   const center = lerp(a, b, gate.t);
@@ -339,7 +344,11 @@ export function GateShape({ gate, fence, scale, selected, onSelect, palette = DE
   const w = gate.width * scale;
   const ft = FENCE_TYPES[fence.fenceType] || FENCE_TYPES.wood;
   const mat = gate.color || fence.color || ft.color;
-  const accent = selected ? BLUE : mat;
+  const accent = (selected || hovered) ? BLUE : mat;
+  const hov = onHover ? {
+    onMouseEnter: (e) => { onHover(gate.id); const st = e.target.getStage(); if (st) st.container().style.cursor = 'pointer'; },
+    onMouseLeave: (e) => { onHover(null); const st = e.target.getStage(); if (st) st.container().style.cursor = ''; },
+  } : {};
   const type = gate.gateType || 'swing';
   const pr = Math.max(2.5, 0.3 * scale);
   // swing toward the enclosed side (away from the dimension strings) by default;
@@ -348,7 +357,7 @@ export function GateShape({ gate, fence, scale, selected, onSelect, palette = DE
   const sw = swingGeom(w, inward, gate.hinge, gate.swing);
   const d = sw.d;
   return (
-    <Group x={center.x * scale} y={center.y * scale} rotation={angDeg} onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)}>
+    <Group x={center.x * scale} y={center.y * scale} rotation={angDeg} onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)} {...hov}>
       <Rect x={-w / 2} y={-Math.max(8, w * 0.5)} width={w * 1.1} height={Math.max(16, w)} fill="transparent" />
       {/* gap — painted in canvas bg so the fence reads as broken here */}
       <Line points={[-w / 2, 0, w / 2, 0]} stroke={palette.opMask} strokeWidth={5} />
@@ -397,10 +406,14 @@ const STAIRLINE = '#475569'; // charcoal — architectural stair line color (not
 // walk line down the path with a dot at the start and an arrowhead at the up
 // end plus an inside "UP" label. When selected it shows width / run / rotate
 // handles (constant screen size, kept upright regardless of stair rotation).
-export function StairShape({ stair, scale, selected, onSelect, onWidthDown, onRunDown, onRotateDown, palette = DEFAULT_PALETTE, zoom = 1 }) {
+export function StairShape({ stair, scale, selected, hovered, onSelect, onHover, onWidthDown, onRunDown, onRotateDown, palette = DEFAULT_PALETTE, zoom = 1 }) {
   const g = stairGeometry(stair);
   const P = (pt) => [pt.x * scale, pt.y * scale];
   const inv = 1 / (zoom || 1);
+  const hov = onHover ? {
+    onMouseEnter: (e) => { onHover(stair.id); const st = e.target.getStage(); if (st) st.container().style.cursor = 'pointer'; },
+    onMouseLeave: (e) => { onHover(null); const st = e.target.getStage(); if (st) st.container().style.cursor = ''; },
+  } : {};
   const rz = g.resize || {};
   const cx = (g.outline[0].x + g.outline[2].x) / 2;
   const rotAt = { x: cx, y: g.outline[0].y - 1.4 };
@@ -416,8 +429,8 @@ export function StairShape({ stair, scale, selected, onSelect, onWidthDown, onRu
   const ax = g.arrow && P(g.arrow.from);
   return (
     <Group x={stair.x * scale} y={stair.y * scale} rotation={stair.rotation || 0}>
-      <Line points={g.outline.flatMap(P)} closed stroke={STAIRLINE} strokeWidth={selected ? 1.6 : 1.3}
-        fill={palette.opMask} hitStrokeWidth={6} onMouseDown={onSelect} onTouchStart={onSelect} />
+      <Line points={g.outline.flatMap(P)} closed stroke={hovered && !selected ? BLUE : STAIRLINE} strokeWidth={(selected || hovered) ? 1.8 : 1.3}
+        fill={palette.opMask} hitStrokeWidth={6} onMouseDown={onSelect} onTouchStart={onSelect} {...hov} />
       {g.treads.map((t, i) => (
         <Line key={i} points={t.poly.flatMap(P)} closed stroke={STAIRLINE} strokeWidth={0.9}
           fill={t.landing ? 'rgba(100,116,139,0.12)' : 'transparent'} listening={false} />
@@ -448,7 +461,7 @@ export function StairShape({ stair, scale, selected, onSelect, onWidthDown, onRu
 // An arrow points at the anchored spot; a leader line runs to a draggable pill.
 // The pill stays a constant screen size (counter-scaled by zoom). Colours for the
 // line, arrow and pill border are per-label and set via the Properties panel.
-export function LabelShape({ label, scale, selected, onPillDown, onAnchorDown, zoom = 1 }) {
+export function LabelShape({ label, scale, selected, hovered, onPillDown, onAnchorDown, onHover, zoom = 1 }) {
   const a = label.anchor, p = label.pos;
   const ax = a.x * scale, ay = a.y * scale, px = p.x * scale, py = p.y * scale;
   const text = label.text || ' ';
@@ -475,9 +488,11 @@ export function LabelShape({ label, scale, selected, onPillDown, onAnchorDown, z
       )}
       {/* draggable pill (constant screen size) */}
       <Group x={px} y={py} scaleX={inv} scaleY={inv}
-        onMouseDown={onPillDown} onTouchStart={onPillDown} onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
+        onMouseDown={onPillDown} onTouchStart={onPillDown}
+        onMouseEnter={(e) => { onHover && onHover(label.id); setCur('move')(e); }}
+        onMouseLeave={(e) => { onHover && onHover(null); setCur('')(e); }}>
         <Rect x={-w / 2} y={-hh / 2} width={w} height={hh} cornerRadius={5} fill="#fff"
-          stroke={selected ? BLUE : borderColor} strokeWidth={selected ? 2 : 1.5}
+          stroke={(selected || hovered) ? BLUE : borderColor} strokeWidth={(selected || hovered) ? 2 : 1.5}
           shadowColor="#0a2540" shadowBlur={3} shadowOpacity={0.16} />
         <Text x={-w / 2} y={-hh / 2 + 4} width={w} align="center" text={text} fontSize={fs} lineHeight={1.35} fontStyle="600" fill="#1e293b" listening={false} />
       </Group>

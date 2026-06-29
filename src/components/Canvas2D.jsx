@@ -928,6 +928,7 @@ export default function Canvas2D() {
             const f = fences.find((x) => x.id === g.fenceId);
             return (
               <GateShape key={g.id} gate={g} fence={f} scale={scale} palette={t} seg={f ? fenceSegs.get(f.id) : null} centroid={fenceCentroid} selected={selection?.id === g.id}
+                hovered={hoverId === g.id} onHover={tool === 'select' ? setHoverId : undefined}
                 onSelect={(e) => {
                   e.cancelBubble = true;
                   if (tool === 'select') { store.select({ type: 'gate', id: g.id }); startHandle({ kind: 'gate', id: g.id, hostId: g.fenceId })(e); }
@@ -939,6 +940,7 @@ export default function Canvas2D() {
             const f = fences.find((x) => x.id === p.fenceId);
             return (
               <PostShape key={p.id} post={p} fence={f} scale={scale} palette={t} seg={f ? fenceSegs.get(f.id) : null} selected={selection?.id === p.id} zoom={view.k}
+                hovered={hoverId === p.id} onHover={tool === 'select' ? setHoverId : undefined}
                 onSelect={(e) => {
                   e.cancelBubble = true;
                   if (tool === 'select') { store.select({ type: 'post', id: p.id }); startHandle({ kind: 'post', id: p.id, hostId: p.fenceId })(e); }
@@ -1215,6 +1217,7 @@ export default function Canvas2D() {
           {/* stairs */}
           {layers.stairs && stairs.map((stp) => (
             <StairShape key={stp.id} stair={stp} scale={scale} palette={t} zoom={view.k} selected={selection?.id === stp.id || multiSet.has(stp.id)}
+              hovered={hoverId === stp.id} onHover={tool === 'select' ? setHoverId : undefined}
               onSelect={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'stair', id: stp.id }); startHandle({ kind: 'stair', id: stp.id })(e); } }}
               onWidthDown={(e) => { e.cancelBubble = true; store.select({ type: 'stair', id: stp.id }); startHandle({ kind: 'stairWidth', id: stp.id })(e); }}
               onRunDown={(e) => { e.cancelBubble = true; store.select({ type: 'stair', id: stp.id }); startHandle({ kind: 'stairRun', id: stp.id })(e); }}
@@ -1224,6 +1227,7 @@ export default function Canvas2D() {
           {/* labels (leader-line callouts) */}
           {layers.labels && labels.map((lb) => (
             <LabelShape key={lb.id} label={lb} scale={scale} zoom={view.k} selected={selection?.id === lb.id || multiSet.has(lb.id)}
+              hovered={hoverId === lb.id} onHover={tool === 'select' ? setHoverId : undefined}
               onPillDown={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'label', id: lb.id }); startHandle({ kind: 'labelPos', id: lb.id })(e); } }}
               onAnchorDown={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'label', id: lb.id }); startHandle({ kind: 'labelAnchor', id: lb.id })(e); } }} />
           ))}
