@@ -20,7 +20,7 @@ function dimPill(x, y, angle, text, fs) {
   // omitted on tight runs) around the label, so nothing crosses the number.
   const attrs = `x="0" y="${r2(fs * 0.33)}" font-size="${fs}" text-anchor="middle" font-family="Poppins, Helvetica, Arial, sans-serif" font-weight="400"`;
   return `<g transform="translate(${r2(x)} ${r2(y)}) rotate(${r2(angle)})">`
-    + `<text ${attrs} fill="${NAVY}">${text}</text>`
+    + `<text ${attrs} fill="#5b6b7e">${text}</text>`
     + `</g>`;
 }
 
@@ -74,30 +74,25 @@ export function buildPlanSvg(model, opts = {}) {
   const sc = (opts.fitW > 0 && opts.fitH > 0) ? Math.min(opts.fitW / wFt, opts.fitH / hFt) : 12;
   const ptFt = (pt) => pt / sc;
   const dimFs = ptFt(opts.dimLabelPt || 5.5); // dimension numbers (smaller so tight openings/doors don't crowd)
-  const DIMW = 0.035;                  // dim-line stroke (feet)
-  // small filled arrowhead at `tip`, pointing in unit dir (ux,uy) — matches the
-  // on-screen dimensions (replaces the old 45° slash ticks)
-  const AL = ptFt(4.5), AW = ptFt(1.6); // arrow length / half-width (constant points)
-  const dimArrow = (tip, ux, uy) => {
-    const nx = -uy, ny = ux;
-    return `<polygon points="${r2(tip.x)},${r2(tip.y)} ${r2(tip.x - ux * AL + nx * AW)},${r2(tip.y - uy * AL + ny * AW)} ${r2(tip.x - ux * AL - nx * AW)},${r2(tip.y - uy * AL - ny * AW)}" fill="${NAVY}"/>`;
-  };
-  // a dimension line with inward arrowheads, split around its label (▶ 13' 6" ◀).
-  // Returns { svg, showNum } so the caller can hide the number on a too-tight run.
+  const DIM = '#9aa7b8';        // light gray for dimension lines / witness / ticks
+  const DIMW = ptFt(0.55);      // thin dim-line stroke (~0.55pt, constant)
+  const WITW = ptFt(0.45);      // witness lines slightly thinner
+  // a dimension line broken around its label (NO arrowheads — 45° slash ticks
+  // mark the ends, drawn by the caller from the geometry). Returns
+  // { svg, showNum } so the number can be hidden on a too-tight run.
   const dimLineSVG = (p0, p1, text, fs) => {
     const dx = p1.x - p0.x, dy = p1.y - p0.y, len = Math.hypot(dx, dy) || 1;
     const ux = dx / len, uy = dy / len, mx = (p0.x + p1.x) / 2, my = (p0.y + p1.y) / 2;
     const half = (text.length * fs * 0.66 + fs * 0.9) / 2; // label half-width (feet)
     const showNum = len / 2 - half > 0.05;
-    let svg = dimArrow(p0, ux, uy) + dimArrow(p1, -ux, -uy); // arrows point inward
-    if (showNum) {
-      svg += `<line x1="${r2(p0.x)}" y1="${r2(p0.y)}" x2="${r2(mx - ux * half)}" y2="${r2(my - uy * half)}" stroke="${NAVY}" stroke-width="${DIMW}"/>`
-        + `<line x1="${r2(mx + ux * half)}" y1="${r2(my + uy * half)}" x2="${r2(p1.x)}" y2="${r2(p1.y)}" stroke="${NAVY}" stroke-width="${DIMW}"/>`;
-    } else {
-      svg += `<line x1="${r2(p0.x)}" y1="${r2(p0.y)}" x2="${r2(p1.x)}" y2="${r2(p1.y)}" stroke="${NAVY}" stroke-width="${DIMW}"/>`;
-    }
+    const seg = (ax, ay, bx, by) => `<line x1="${r2(ax)}" y1="${r2(ay)}" x2="${r2(bx)}" y2="${r2(by)}" stroke="${DIM}" stroke-width="${DIMW}"/>`;
+    const svg = showNum
+      ? seg(p0.x, p0.y, mx - ux * half, my - uy * half) + seg(mx + ux * half, my + uy * half, p1.x, p1.y)
+      : seg(p0.x, p0.y, p1.x, p1.y);
     return { svg, showNum };
   };
+  // a 45° end tick (architectural slash), in the dim color
+  const dimSlash = (sl) => `<line x1="${r2(sl[0].x)}" y1="${r2(sl[0].y)}" x2="${r2(sl[1].x)}" y2="${r2(sl[1].y)}" stroke="${DIM}" stroke-width="${DIMW}"/>`;
 
   fences.forEach((f) => {
     const ft = FENCE_TYPES[f.fenceType] || FENCE_TYPES.wood;
@@ -220,9 +215,10 @@ export function buildPlanSvg(model, opts = {}) {
       const extra = hasOpenings && k !== 'interior' ? ROW_GAP : 0;
       const dg = wallDimGeometry(w, k, (w.dimOff ?? baseOff) + extra, centroid, wj, unit);
       if (!dg) return;
-      dg.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.035"/>`));
+      dg.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${DIM}" stroke-width="${WITW}"/>`));
       const dl = dimLineSVG(dg.line[0], dg.line[1], dg.label.text, dimFs);
       el.push(dl.svg);
+      dg.slashes.forEach((sl) => el.push(dimSlash(sl)));
       if (dl.showNum) el.push(dimPill(dg.label.x, dg.label.y, dg.label.angle, dg.label.text, dimFs));
     });
   });
@@ -232,7 +228,8 @@ export function buildPlanSvg(model, opts = {}) {
     const wops = openings.filter((o) => o.wallId === w.id);
     const og = wallOpeningDimGeometry(w, wops, w.openDimOff ?? baseOff, centroid, wj, unit);
     if (!og) return;
-    og.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.03"/>`));
+    og.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${DIM}" stroke-width="${WITW}"/>`));
+    og.ticks.forEach((tk) => el.push(dimSlash(tk)));
     og.segments.forEach((seg) => { const dl = dimLineSVG(seg.line[0], seg.line[1], seg.label.text, dimFs); el.push(dl.svg); if (dl.showNum) el.push(dimPill(seg.label.x, seg.label.y, seg.label.angle, seg.label.text, dimFs)); });
   });
 
@@ -244,14 +241,16 @@ export function buildPlanSvg(model, opts = {}) {
     const fbase = f.dimOff ?? baseOff;
     const dg = wallDimGeometry(fw, 'centerline', fbase + extra, fenceCentroid, fj, unit);
     if (dg) {
-      dg.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.035"/>`));
+      dg.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${DIM}" stroke-width="${WITW}"/>`));
       const dl = dimLineSVG(dg.line[0], dg.line[1], dg.label.text, dimFs);
       el.push(dl.svg);
+      dg.slashes.forEach((sl) => el.push(dimSlash(sl)));
       if (dl.showNum) el.push(dimPill(dg.label.x, dg.label.y, dg.label.angle, dg.label.text, dimFs));
     }
     const og = wallOpeningDimGeometry(fw, fgates, f.openDimOff ?? fbase, fenceCentroid, fj, unit);
     if (og) {
-      og.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.03"/>`));
+      og.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${DIM}" stroke-width="${WITW}"/>`));
+      og.ticks.forEach((tk) => el.push(dimSlash(tk)));
       og.segments.forEach((seg) => { const dl = dimLineSVG(seg.line[0], seg.line[1], seg.label.text, dimFs); el.push(dl.svg); if (dl.showNum) el.push(dimPill(seg.label.x, seg.label.y, seg.label.angle, seg.label.text, dimFs)); });
     }
   });
@@ -441,14 +440,23 @@ function drawLegend(doc, q, model, opts, x, y, w, h) {
   doc.setFont('Poppins', 'normal'); doc.setFontSize(8.5); doc.setTextColor(100, 116, 139);
   doc.text(`Wall & Fence Layout  ·  ${new Date().toLocaleDateString()}`, x + pad, cy); cy += 16;
 
-  const section = (t) => { doc.setFont('Poppins', 'bold'); doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.text(t.toUpperCase(), x + pad, cy); cy += 4; doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.6); doc.line(x + pad, cy, right, cy); cy += 11; };
-  const row = (label, val, sym, indent = 0) => {
+  const section = (t) => {
+    cy += 9; // breathing room above each section
+    doc.setFont('Poppins', 'bold'); doc.setFontSize(8); doc.setTextColor(20, 184, 166);
+    doc.text(t.toUpperCase(), x + pad, cy); cy += 5;
+    doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.6); doc.line(x + pad, cy, right, cy); cy += 14;
+  };
+  // a label/value row, optional symbol on the left and an optional small gray
+  // sub-note under it; the hairline separator is drawn AFTER the sub-note.
+  const row = (label, val, sym, sub) => {
     doc.setTextColor(10, 37, 64); doc.setFont('Poppins', 'normal'); doc.setFontSize(10);
     if (sym) { drawFenceSymbol(doc, sym.style, sym.color, x + pad, cy - 3, 20); doc.text(label, x + pad + 26, cy); }
-    else doc.text(label, x + pad + indent, cy);
+    else doc.text(label, x + pad, cy);
     doc.setFont('Poppins', 'bold'); doc.text(String(val), right, cy, { align: 'right' });
-    doc.setDrawColor(232, 237, 243); doc.setLineWidth(0.4); doc.line(x + pad, cy + 4, right, cy + 4);
-    cy += 15;
+    cy += sub ? 9 : 6;
+    if (sub) { doc.setFont('Poppins', 'normal'); doc.setFontSize(7.4); doc.setTextColor(125, 137, 152); doc.text(sub, x + pad, cy); cy += 7; }
+    doc.setDrawColor(236, 240, 245); doc.setLineWidth(0.4); doc.line(x + pad, cy, right, cy);
+    cy += 11;
   };
   // small grey note line (component breakdown), no rule. Starts at the left
   // margin (not indented under the symbol) and shrinks to fit so long breakdowns
@@ -462,11 +470,10 @@ function drawLegend(doc, q, model, opts, x, y, w, h) {
   };
 
   section('Quantities');
-  row('Wall linear ft', q.wallLF.toFixed(1));
-  if (q.wallExtLF > 0 || q.wallIntLF > 0) { doc.setFontSize(7.6); doc.setTextColor(120, 132, 148); doc.setFont('Poppins', 'normal'); doc.text(`exterior ${q.wallExtLF.toFixed(0)} ft  ·  interior ${q.wallIntLF.toFixed(0)} ft`, x + pad, cy); cy += 12; }
+  row('Wall linear ft', q.wallLF.toFixed(1), null,
+    (q.wallExtLF > 0 || q.wallIntLF > 0) ? `exterior ${q.wallExtLF.toFixed(0)} ft  ·  interior ${q.wallIntLF.toFixed(0)} ft` : null);
   row('Doors / Windows', `${q.doorCount} / ${q.windowCount}`);
   if (q.openingCount) row('Openings', q.openingCount);
-  cy += 4;
 
   // ---- Fence schedule with per-type component breakdown ----
   const fc = fenceComponents(model);
@@ -480,7 +487,6 @@ function drawLegend(doc, q, model, opts, x, y, w, h) {
     }
     row('Total fence ft', q.fenceLF.toFixed(1));
     row('Total posts / gates', `${q.postCount} / ${q.gateCount}`);
-    cy += 4;
   }
 
   // ---- Door & Window schedule (grouped by type + size) ----
@@ -522,14 +528,14 @@ function drawLegend(doc, q, model, opts, x, y, w, h) {
     for (const [k, v] of eqKinds) {
       drawEquipSymbol(doc, k, x + pad, cy, 14);
       doc.setTextColor(10, 37, 64); doc.setFont('Poppins', 'normal'); doc.setFontSize(10);
-      doc.text(v.label, x + pad + 24, cy);
+      doc.text(v.label, x + pad + 26, cy);
       doc.setFont('Poppins', 'bold'); doc.text(String(v.count), right, cy, { align: 'right' });
-      doc.setDrawColor(232, 237, 243); doc.setLineWidth(0.4); doc.line(x + pad, cy + 4, right, cy + 4);
-      cy += 16;
+      cy += 6;
+      doc.setDrawColor(236, 240, 245); doc.setLineWidth(0.4); doc.line(x + pad, cy, right, cy);
+      cy += 11;
     }
     if (q.affectedRooms) row('Affected rooms', q.affectedRooms);
     if (q.affectedRegions) row('Affected regions', `${q.affectedRegions} · ${Math.round(q.affectedRegionArea || 0)} sq ft`);
-    cy += 4;
   }
 
   cy = Math.max(cy + 6, y + h - 34);
