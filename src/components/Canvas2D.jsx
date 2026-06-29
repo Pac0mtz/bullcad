@@ -958,6 +958,7 @@ export default function Canvas2D() {
             const w = walls.find((x) => x.id === o.wallId);
             return (
               <OpeningShape key={o.id} op={o} wall={w} scale={scale} palette={t} centroid={wallCentroid} seg={w ? wallSegs.get(w.id) : null} selected={selection?.id === o.id}
+                hovered={hoverId === o.id} onHover={tool === 'select' ? setHoverId : undefined}
                 onSelect={(e) => {
                   e.cancelBubble = true;
                   if (tool === 'select') { store.select({ type: 'opening', id: o.id }); startHandle({ kind: 'opening', id: o.id, hostId: o.wallId })(e); }

@@ -159,14 +159,15 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
 export function WallShape({ wall, scale, selected, hovered, onSelect, onHover, palette = DEFAULT_PALETTE, seg = null, poly = null }) {
   // `poly` is the wall body as a mitered, filled polygon (clean joints at any
   // junction). Fall back to a thick stroked centerline when it isn't available.
-  const fill = selected ? palette.wallLineSel : palette.wallLine;
-  // hover (Select tool): blue outline + pointer cursor so it reads as clickable
+  // hover (Select tool) reads like the selection — the whole wall body turns blue
+  // (just no handles), so it's obvious what a click will grab.
+  const fill = (selected || hovered) ? palette.wallLineSel : palette.wallLine;
   const hov = onHover ? {
     onMouseEnter: (e) => { onHover(wall.id); const st = e.target.getStage(); if (st) st.container().style.cursor = 'pointer'; },
     onMouseLeave: (e) => { onHover(null); const st = e.target.getStage(); if (st) st.container().style.cursor = ''; },
   } : {};
-  const edge = selected ? fill : (hovered ? BLUE : fill);
-  const ew = selected ? 0.6 : (hovered ? 1.4 : 0.6);
+  const edge = fill;
+  const ew = 0.6;
   if (poly && poly.points && poly.points.length >= 3) {
     const pts = poly.points.flatMap((p) => [p.x * scale, p.y * scale]);
     return (
@@ -178,7 +179,7 @@ export function WallShape({ wall, scale, selected, hovered, onSelect, onHover, p
   const a = seg?.a || wall.a, b = seg?.b || wall.b;
   const th = wallBandWidth(wall, scale);
   return (
-    <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)}>
+    <Group onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)} {...hov}>
       <Line points={[a.x * scale, a.y * scale, b.x * scale, b.y * scale]} stroke={fill} strokeWidth={th} lineCap="square"
         hitStrokeWidth={Math.max(16, th)} />
     </Group>
@@ -186,7 +187,7 @@ export function WallShape({ wall, scale, selected, hovered, onSelect, onHover, p
 }
 
 // ---------------- OPENING (door / window / opening) ----------------
-export function OpeningShape({ op, wall, scale, selected, onSelect, palette = DEFAULT_PALETTE, centroid = null, seg = null }) {
+export function OpeningShape({ op, wall, scale, selected, hovered, onSelect, onHover, palette = DEFAULT_PALETTE, centroid = null, seg = null }) {
   if (!wall) return null;
   const a = seg?.a || wall.a, b = seg?.b || wall.b;
   const center = lerp(a, b, op.t);
@@ -195,7 +196,12 @@ export function OpeningShape({ op, wall, scale, selected, onSelect, palette = DE
   const w = op.width * scale;
   const th = wallBandWidth(wall, scale);
   const cut = th + 2; // mask a hair wider than the wall so no slivers remain
-  const accent = selected ? palette.opStrokeSel : palette.opStroke;
+  // hover reads like the selection (blue accent), just without handles
+  const accent = (selected || hovered) ? palette.opStrokeSel : palette.opStroke;
+  const hov = onHover ? {
+    onMouseEnter: (e) => { onHover(op.id); const st = e.target.getStage(); if (st) st.container().style.cursor = 'pointer'; },
+    onMouseLeave: (e) => { onHover(null); const st = e.target.getStage(); if (st) st.container().style.cursor = ''; },
+  } : {};
 
   // projecting windows (bay / garden): which local-y direction bumps outward
   const proj = op.type === 'window' ? WINDOW_STYLES[op.style]?.project : null;
@@ -208,7 +214,7 @@ export function OpeningShape({ op, wall, scale, selected, onSelect, palette = DE
   const projPx = proj ? (WINDOW_STYLES[op.style].depth || 1.5) * scale * oy : 0;
 
   return (
-    <Group x={center.x * scale + offX} y={center.y * scale + offY} rotation={angDeg} onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)}>
+    <Group x={center.x * scale + offX} y={center.y * scale + offY} rotation={angDeg} onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)} {...hov}>
       {/* hit area */}
       <Rect x={-w / 2} y={-th} width={w} height={th * 2} fill="transparent" />
       {/* cut the wall: masking band painted in the canvas background color */}
