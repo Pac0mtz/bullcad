@@ -242,8 +242,9 @@ export default function Canvas2D() {
     }
   }, [coarse, tool]); // eslint-disable-line react-hooks/exhaustive-deps
   const mBegin = () => setMDraw((m) => ({ ...m, phase: 'placing', anchor: m.pointer, start: m.pointer }));
-  const mAddSeg = (cont) => setMDraw((m) => {
-    if (!m.anchor) return m;
+  const mAddSeg = (cont) => {
+    const m = mDraw;
+    if (!m || !m.anchor) return;
     const end = m.pointer;
     if (dist(m.anchor, end) > 0.1) {
       tool === 'wall' ? store.addWall(m.anchor, end) : store.addFence(m.anchor, end);
@@ -252,12 +253,16 @@ export default function Canvas2D() {
     }
     const closed = m.start && dist(end, m.start) < 0.35;
     if (!cont || closed) {
+      // "End wall" finishes this run and returns to the Begin-Wall sheet (stays in
+      // the tool so you can draw another) — it does NOT jump to the Select tool.
       if (closed && tool === 'wall') addRoomAreaLabel(runPath.current);
       runPath.current = [];
-      return { phase: 'idle', anchor: null, pointer: end, start: null };
+      if (tool === 'wall') store.weldWalls(); // clean up the run into shared edges
+      setMDraw({ phase: 'idle', anchor: null, pointer: end, start: null });
+    } else {
+      setMDraw({ ...m, anchor: end, pointer: end });
     }
-    return { ...m, anchor: end, pointer: end };
-  });
+  };
 
   // focus the length-entry box as soon as a wall/fence run is started — but NOT
   // on touch, where auto-popping the keyboard hides the plan (tap the field to type)
@@ -1140,8 +1145,17 @@ export default function Canvas2D() {
           })()}
 
           {/* mobile guided draw: rubber band + draggable position pointer */}
-          {mDraw && (
+          {mDraw && (() => {
+            // visible plan extent (feet) so the crosshair guides span the whole canvas
+            const gx0 = (0 - view.x) / (scale * view.k), gx1 = (size.w - view.x) / (scale * view.k);
+            const gy0 = (0 - view.y) / (scale * view.k), gy1 = (size.h - view.y) / (scale * view.k);
+            const px = mDraw.pointer.x, py = mDraw.pointer.y;
+            return (
             <>
+              {/* full-canvas crosshair guides through the target — line up the start
+                  point with any wall/grid line across the whole plan */}
+              <Line points={[px * scale, gy0 * scale, px * scale, gy1 * scale]} stroke={BLUE} strokeWidth={1 / view.k} dash={[6 / view.k, 5 / view.k]} opacity={0.45} listening={false} />
+              <Line points={[gx0 * scale, py * scale, gx1 * scale, py * scale]} stroke={BLUE} strokeWidth={1 / view.k} dash={[6 / view.k, 5 / view.k]} opacity={0.45} listening={false} />
               {mDraw.phase === 'placing' && mDraw.anchor && (
                 <Line points={[mDraw.anchor.x * scale, mDraw.anchor.y * scale, mDraw.pointer.x * scale, mDraw.pointer.y * scale]}
                   stroke={tool === 'wall' ? BLUE : TEAL} strokeWidth={2.5 / view.k} dash={[7 / view.k, 5 / view.k]} listening={false} />
@@ -1153,9 +1167,14 @@ export default function Canvas2D() {
               )}
               <Group x={mDraw.pointer.x * scale} y={mDraw.pointer.y * scale} draggable
                 onDragStart={(e) => { e.cancelBubble = true; }}
-                onDragMove={(e) => { e.cancelBubble = true; const p = drawPt({ x: e.target.x() / scale, y: e.target.y() / scale }); setMDraw((m) => m && { ...m, pointer: { x: p.x, y: p.y } }); }}>
+                onDragMove={(e) => { e.cancelBubble = true; const p = drawPt({ x: e.target.x() / scale, y: e.target.y() / scale }); e.target.position({ x: p.x * scale, y: p.y * scale }); setMDraw((m) => m && { ...m, pointer: { x: p.x, y: p.y } }); }}>
                 <Group scaleX={1 / view.k} scaleY={1 / view.k}>
                   <Circle radius={26} stroke={BLUE} strokeWidth={2} opacity={0.5} />
+                  {/* drag helper label */}
+                  <Group y={42} listening={false}>
+                    <Rect x={-34} y={-9} width={68} height={18} cornerRadius={9} fill="rgba(10,37,64,0.92)" />
+                    <Text x={-34} y={-5} width={68} align="center" text="drag me" fontSize={10} fontStyle="600" fill="#fff" />
+                  </Group>
                   {[[0, -26, 0, -14], [0, 26, 0, 14], [-26, 0, -14, 0], [26, 0, 14, 0]].map((p, i) => (
                     <Line key={i} points={p} stroke={BLUE} strokeWidth={2} lineCap="round" />
                   ))}
@@ -1163,7 +1182,8 @@ export default function Canvas2D() {
                 </Group>
               </Group>
             </>
-          )}
+            );
+          })()}
 
           {/* room labels: click the name/area to SELECT the room (the floor never
               grabs clicks, so it won't fight with wall selection); drag the label
