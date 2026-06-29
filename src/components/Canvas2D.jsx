@@ -1083,7 +1083,6 @@ export default function Canvas2D() {
           {layers.dims && dimOpacity > 0.02 && <Group opacity={dimOpacity} listening={dimOpacity > 0.5}>
             {walls.map((w) => {
               if (w.noDim) return null; // dimensions hidden for this wall
-              const base = w.dimOff ?? dimOffset;
               // an interior partition has no meaningful exterior face — measuring it
               // "exterior" overshoots into the walls it ties into. Dimension it by its
               // location: fall back to the interior (true span) for non-exterior walls.
@@ -1094,9 +1093,13 @@ export default function Canvas2D() {
               const wOpen = openings.some((o) => o.wallId === w.id);
               return kinds.map((k) => { // per-wall mode override
                 const extra = wOpen && k !== 'interior' ? ROW_GAP : 0;
+                // each row (interior / exterior / centerline) carries its OWN offset
+                // so dragging one dimension never drags the others with it
+                const field = 'dimOff_' + k;
+                const base = w[field] ?? w.dimOff ?? dimOffset;
                 return (
                   <WallDimension key={'dw' + w.id + k} wall={w} kind={k} offset={base + extra} justify={w.justify || wallJustify}
-                    centroid={wallCentroid} scale={scale} palette={t} color={t.wallDim} onPillDown={startOffsetDrag(w, 'wall', w.id, extra)} zoom={view.k} />
+                    centroid={wallCentroid} scale={scale} palette={t} color={t.wallDim} onPillDown={startOffsetDrag(w, 'wall', w.id, extra, field)} zoom={view.k} />
                 );
               });
             })}

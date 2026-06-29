@@ -215,7 +215,8 @@ export function buildPlanSvg(model, opts = {}) {
     const wOpen = openings.some((o) => o.wallId === w.id);
     kinds.forEach((k) => {
       const extra = wOpen && k !== 'interior' ? ROW_GAP : 0;
-      const dg = wallDimGeometry(w, k, (w.dimOff ?? baseOff) + extra, centroid, wj, unit);
+      const rowOff = w['dimOff_' + k] ?? w.dimOff ?? baseOff; // per-row offset (each drags independently)
+      const dg = wallDimGeometry(w, k, rowOff + extra, centroid, wj, unit);
       if (!dg) return;
       dg.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${DIM}" stroke-width="${WITW}"/>`));
       const dl = dimLineSVG(dg.line[0], dg.line[1], dg.label.text, dimFs);

@@ -494,7 +494,9 @@ button:focus-visible,
 /* wall/fence drawing toolbar (top-center): live thickness + Exit Drawing */
 .draw-toolbar {
   position: absolute;
-  top: 14px; left: 50%; transform: translateX(-50%);
+  /* sits below the page-tabs / zoom row on desktop so it doesn't crowd the top
+     edge or overlap the drawing (phones reposition it in the media query below) */
+  top: 64px; left: 50%; transform: translateX(-50%);
   z-index: 10;
   display: flex; align-items: center; gap: 14px;
   background: rgba(10, 37, 64, 0.95); color: #fff;

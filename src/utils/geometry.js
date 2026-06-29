@@ -188,9 +188,10 @@ export const GATE_TYPES = {
 export const GATE_TYPE_ORDER = ['swing', 'double', 'sliding'];
 
 export const OPENING_DEFAULTS = {
-  door: { width: 3, height: 6.75, label: 'Door' },
+  // most-common US standards: 3'0" × 6'8" door, 3'0" × 4'0" window (sill 3'0")
+  door: { width: 3, height: 6.6667, label: 'Door' },
   window: { width: 3, height: 4, sill: 3, label: 'Window' },
-  opening: { width: 4, height: 7, label: 'Opening' },
+  opening: { width: 3, height: 6.6667, label: 'Opening' },
 };
 
 // ----- Supported window styles -----
