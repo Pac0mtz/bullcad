@@ -384,6 +384,20 @@ function drawFenceSymbol(doc, style, hex, x, yBase, w) {
   }
 }
 
+// Legend glyph for a restoration component: a colored ring with the code (AM/DH/
+// AS/HT/M) inside, matching the on-plan token. Air movers get a small airflow
+// triangle on top. `yBase` is the row's text baseline.
+function drawEquipSymbol(doc, kind, x, yBase, sz = 14) {
+  const meta = EQUIPMENT[kind] || {};
+  const [r, g, b] = hexRgb(meta.color || '#64748b');
+  const rad = sz / 2, cx = x + rad, cy = yBase - 3;
+  if (meta.dir) { doc.setFillColor(r, g, b); doc.triangle(cx, cy - rad - 3.2, cx - 2.4, cy - rad + 0.4, cx + 2.4, cy - rad + 0.4, 'F'); }
+  doc.setFillColor(255, 255, 255); doc.setDrawColor(r, g, b); doc.setLineWidth(1.1);
+  doc.circle(cx, cy, rad, 'FD');
+  doc.setFont('Poppins', 'bold'); doc.setFontSize(6.2); doc.setTextColor(r, g, b);
+  doc.text(meta.code || '?', cx, cy + 2.1, { align: 'center' });
+}
+
 // A small north compass drawn with jsPDF primitives.
 function drawCompass(doc, cx, cy, r) {
   doc.setFillColor(255, 255, 255); doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.8);
@@ -496,6 +510,23 @@ function drawLegend(doc, q, model, opts, x, y, w, h) {
       doc.setDrawColor(232, 237, 243); doc.setLineWidth(0.4); doc.line(x + pad, cy + 10, right, cy + 10);
       cy += 18;
     }
+  }
+
+  // ---- Restoration / drying-map equipment (icons + counts) ----
+  const eqKinds = Object.entries(q.equipByKind || {});
+  if (eqKinds.length || q.affectedRooms || q.affectedRegions) {
+    section('Restoration');
+    for (const [k, v] of eqKinds) {
+      drawEquipSymbol(doc, k, x + pad, cy, 14);
+      doc.setTextColor(10, 37, 64); doc.setFont('Poppins', 'normal'); doc.setFontSize(10);
+      doc.text(v.label, x + pad + 24, cy);
+      doc.setFont('Poppins', 'bold'); doc.text(String(v.count), right, cy, { align: 'right' });
+      doc.setDrawColor(232, 237, 243); doc.setLineWidth(0.4); doc.line(x + pad, cy + 4, right, cy + 4);
+      cy += 16;
+    }
+    if (q.affectedRooms) row('Affected rooms', q.affectedRooms);
+    if (q.affectedRegions) row('Affected regions', `${q.affectedRegions} · ${Math.round(q.affectedRegionArea || 0)} sq ft`);
+    cy += 4;
   }
 
   cy = Math.max(cy + 6, y + h - 34);

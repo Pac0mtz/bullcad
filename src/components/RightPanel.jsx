@@ -537,9 +537,20 @@ function SelectedProps() {
             <p className="empty-note" style={{ marginTop: 0 }}>
               <b>{meta.label || 'Equipment'} {meta.code}{el.num || ''}</b> — drying-map component. Drag it on the plan to reposition.
             </p>
-            <Num label="Rotation" suffix="deg" step={15} min={0} max={360}
-              value={Math.round(el.rotation || 0)} onChange={(v) => commitSet({ rotation: ((v % 360) + 360) % 360 })} />
-            <p className="empty-note">Rotation aims the air-mover arrow / orients the symbol.</p>
+            <div className="field">
+              <label>Direction — {Math.round(((el.rotation || 0) % 360 + 360) % 360)}°</label>
+              <input type="range" min="0" max="359" step="1" value={Math.round(el.rotation || 0)} style={{ width: '100%' }}
+                onChange={(e) => set({ rotation: parseInt(e.target.value) })}
+                onMouseUp={(e) => commitSet({ rotation: parseInt(e.target.value) })}
+                onTouchEnd={(e) => commitSet({ rotation: parseInt(e.target.value) })} />
+            </div>
+            <div className="row2" style={{ marginTop: 2 }}>
+              <button className="btn ghost" style={{ background: 'var(--slate-bg)', color: 'var(--navy)' }}
+                onClick={() => commitSet({ rotation: (((el.rotation || 0) - 15) % 360 + 360) % 360 })}>⟲ 15°</button>
+              <button className="btn ghost" style={{ background: 'var(--slate-bg)', color: 'var(--navy)' }}
+                onClick={() => commitSet({ rotation: (((el.rotation || 0) + 15) % 360) })}>15° ⟳</button>
+            </div>
+            <p className="empty-note">{meta.dir ? 'Direction aims the air-mover airflow arrow.' : 'Direction orients the symbol.'}</p>
           </>
         );
       })()}

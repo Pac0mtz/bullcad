@@ -640,10 +640,30 @@ button:focus-visible,
   background: #ef4444; color: #fff; cursor: pointer;
 }
 .wall-quick .wq-del:hover { filter: brightness(1.08); }
+/* equipment rotation dial — a slider between two nudge buttons */
+.wall-quick .eq-rot { display: flex; align-items: center; gap: 6px; }
+.wall-quick .eq-rot button {
+  width: 26px; height: 26px; border: none; border-radius: 7px;
+  background: rgba(255,255,255,0.14); color: #fff; font-size: 15px; line-height: 1; cursor: pointer;
+}
+.wall-quick .eq-rot button:hover { background: rgba(255,255,255,0.24); }
+.wall-quick .eq-rot input[type="range"] {
+  -webkit-appearance: none; appearance: none; width: 96px; height: 4px; border-radius: 4px;
+  background: rgba(255,255,255,0.25); outline: none; cursor: pointer; margin: 0;
+}
+.wall-quick .eq-rot input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 15px; height: 15px; border-radius: 50%;
+  background: #fff; border: 2px solid var(--blue, #2563eb); cursor: pointer;
+}
+.wall-quick .eq-rot input[type="range"]::-moz-range-thumb {
+  width: 15px; height: 15px; border-radius: 50%; background: #fff; border: 2px solid var(--blue, #2563eb); cursor: pointer;
+}
 @media (pointer: coarse) {
   .wall-quick { gap: 10px; padding: 6px 8px; border-radius: 13px; }
-  .wall-quick .wq-thick button, .wall-quick .wq-del, .wall-quick .wq-dup { width: 34px; height: 34px; font-size: 18px; }
+  .wall-quick .wq-thick button, .wall-quick .wq-del, .wall-quick .wq-dup, .wall-quick .eq-rot button { width: 34px; height: 34px; font-size: 18px; }
   .wall-quick .wq-val { min-width: 34px; font-size: 14px; }
+  .wall-quick .eq-rot input[type="range"] { width: 80px; height: 6px; }
+  .wall-quick .eq-rot input[type="range"]::-webkit-slider-thumb { width: 20px; height: 20px; }
 }
 
 /* phones: the draw toolbar shouldn't crowd or overflow — drop the verbose hint,

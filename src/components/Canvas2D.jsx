@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer, Line, Circle, Text, Group, Rect, Shape } from 'react-konva';
 import { useStore } from '../store.js';
 import {
-  dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, wallPolygons, stairGeometry, snapAngle, detectRooms, roomWalls, roomSignature, parseLength, simplifyPath,
+  dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, wallPolygons, stairGeometry, snapAngle, detectRooms, roomWalls, roomSignature, parseLength, simplifyPath, EQUIPMENT,
 } from '../utils/geometry.js';
 
 const FENCE_THICK = 0.3; // nominal fence body width (ft) for alignment offset
@@ -879,6 +879,7 @@ export default function Canvas2D() {
   const selFence = selection?.type === 'fence' ? fences.find((f) => f.id === selection.id) : null;
   const selOpening = selection?.type === 'opening' ? openings.find((o) => o.id === selection.id) : null;
   const selGate = selection?.type === 'gate' ? gates.find((g) => g.id === selection.id) : null;
+  const selEquip = selection?.type === 'equip' ? equips.find((eq) => eq.id === selection.id) : null;
 
   // marquee group: set of selected ids + the group bounding box (feet)
   const multiSet = useMemo(() => new Set(multi.map((m) => m.id)), [multi]);
@@ -1608,6 +1609,35 @@ export default function Canvas2D() {
             </div>
             <button className="wq-dup" onMouseDown={stop(() => store.duplicateElement('opening', selOpening.id))} aria-label={`Duplicate ${selOpening.type}`}><IconDuplicate style={{ width: 15, height: 15 }} /></button>
             <button className="wq-del" onMouseDown={stop(() => store.deleteSelected())} aria-label={`Delete ${selOpening.type}`}><IconTrash style={{ width: 15, height: 15 }} /></button>
+          </div>
+        );
+      })()}
+
+      {/* selected restoration equipment quick action — a rotation/direction dial
+          (slider) riding below the token, plus delete. Mirrors the wall pill. */}
+      {selEquip && tool === 'select' && (() => {
+        const meta = EQUIPMENT[selEquip.kind] || {};
+        const px = view.x + selEquip.x * scale * view.k;
+        const py = view.y + selEquip.y * scale * view.k;
+        const cx = Math.max(118, Math.min(size.w - 118, px));
+        const cy = Math.max(30, Math.min(size.h - 30, py + (coarse ? 60 : 50)));
+        const deg = Math.round(((selEquip.rotation || 0) % 360 + 360) % 360);
+        const setRot = (v, commit) => store.updateElement('equip', selEquip.id, { rotation: ((Math.round(v) % 360) + 360) % 360 }, commit);
+        const stop = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); fn(); };
+        return (
+          <div className="wall-quick equip-quick" style={{ left: cx, top: cy }}
+            onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+            <div className="eq-rot" title={meta.dir ? 'Aim the airflow arrow' : 'Orient the symbol'}>
+              <button onMouseDown={stop(() => setRot(deg - 15, true))} aria-label="Rotate left">⟲</button>
+              <input type="range" min="0" max="359" value={deg}
+                onChange={(e) => setRot(+e.target.value, false)}
+                onMouseUp={(e) => setRot(+e.target.value, true)}
+                onTouchEnd={(e) => setRot(+e.target.value, true)}
+                onMouseDown={(e) => e.stopPropagation()} />
+              <span className="wq-val">{deg}°</span>
+              <button onMouseDown={stop(() => setRot(deg + 15, true))} aria-label="Rotate right">⟳</button>
+            </div>
+            <button className="wq-del" onMouseDown={stop(() => store.deleteSelected())} aria-label="Delete equipment"><IconTrash style={{ width: 15, height: 15 }} /></button>
           </div>
         );
       })()}
