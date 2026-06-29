@@ -90,6 +90,7 @@ function SelectedProps() {
   const labels = useStore((s) => s.labels);
   const stairs = useStore((s) => s.stairs);
   const equips = useStore((s) => s.equips);
+  const regions = useStore((s) => s.regions);
   const wallHeightDefault = useStore((s) => s.wallHeight);
   const dimOffsetDefault = useStore((s) => s.dimOffset);
   const wallJustify = useStore((s) => s.wallJustify);
@@ -121,7 +122,7 @@ function SelectedProps() {
     return <RoomProps key={sel.id} sig={sel.id} area={match ? Math.round(match.r.area) : 0} wallCount={multi.length} />;
   }
 
-  const list = { wall: walls, opening: openings, fence: fences, gate: gates, post: posts, label: labels, stair: stairs, equip: equips }[sel.type];
+  const list = { wall: walls, opening: openings, fence: fences, gate: gates, post: posts, label: labels, stair: stairs, equip: equips, region: regions }[sel.type];
   const el = list.find((e) => e.id === sel.id);
   if (!el) return <p className="empty-note">Selection no longer exists.</p>;
 
@@ -543,6 +544,20 @@ function SelectedProps() {
         );
       })()}
 
+      {sel.type === 'region' && (
+        <>
+          <p className="empty-note" style={{ marginTop: 0 }}>Affected (wet) area. Drag the region to move it, or drag a corner handle to reshape it.</p>
+          <div className="field">
+            <label>Water category</label>
+            <select value={el.category || 1} onChange={(e) => commitSet({ category: +e.target.value })}>
+              <option value={1}>Category 1 — clean water</option>
+              <option value={2}>Category 2 — grey water</option>
+              <option value={3}>Category 3 — black water</option>
+            </select>
+          </div>
+        </>
+      )}
+
       <button className="btn danger del-btn" onClick={del}><IconTrash style={{ width: 16, height: 16 }} /> Delete</button>
     </div>
   );
@@ -556,10 +571,11 @@ function Quantities() {
   const posts = useStore((s) => s.posts);
   const equips = useStore((s) => s.equips);
   const roomAffected = useStore((s) => s.roomAffected);
+  const regions = useStore((s) => s.regions);
   const exportPlan = useStore((s) => s.exportPlan);
   const [copied, setCopied] = useState('');
 
-  const q = computeQuantities({ walls, openings, fences, gates, posts, equips, roomAffected });
+  const q = computeQuantities({ walls, openings, fences, gates, posts, equips, roomAffected, regions });
   const rows = quantitiesRows(q);
 
   const copyTable = () => {
@@ -616,6 +632,9 @@ function Quantities() {
           ))}
           {q.affectedRooms > 0 && (
             <tr><td>Affected rooms</td><td className="val">{q.affectedRooms}</td></tr>
+          )}
+          {q.affectedRegions > 0 && (
+            <tr><td>Affected regions</td><td className="val">{q.affectedRegions} · {Math.round(q.affectedRegionArea)} sq ft</td></tr>
           )}
         </tbody>
       </table>

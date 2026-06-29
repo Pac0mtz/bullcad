@@ -62,6 +62,11 @@ export function buildPlanSvg(model, opts = {}) {
       el.push(`<path d="${d}" fill="rgba(245,158,11,0.22)" fill-rule="evenodd"/>`);
     });
   }
+  // free-shape affected regions (partial wet areas)
+  (model.regions || []).forEach((rg) => {
+    if (!rg.points || rg.points.length < 3) return;
+    el.push(`<polygon points="${rg.points.map((p) => `${r2(p.x)},${r2(p.y)}`).join(' ')}" fill="rgba(245,158,11,0.28)" stroke="rgba(180,83,9,0.6)" stroke-width="0.06"/>`);
+  });
 
   // On-page scale (points per foot) so label fonts can be set in real POINTS:
   // the SVG is in feet and gets scaled by `sc` to fit the page. ptFt(10) is the

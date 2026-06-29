@@ -28,7 +28,7 @@ function weldPatch(s, walls, openings) {
 }
 
 // ----- snapshot helpers for undo/redo -----
-const GEOM_KEYS = ['walls', 'openings', 'fences', 'gates', 'posts', 'labels', 'stairs', 'equips', 'roomNames', 'roomLabelPos', 'roomAffected'];
+const GEOM_KEYS = ['walls', 'openings', 'fences', 'gates', 'posts', 'labels', 'stairs', 'equips', 'regions', 'roomNames', 'roomLabelPos', 'roomAffected'];
 // roomNames {sig: name}, roomLabelPos {sig:{x,y}}, roomAffected {sig:true} are maps; rest are arrays
 const emptyVal = (k) => (k === 'roomNames' || k === 'roomLabelPos' || k === 'roomAffected' ? {} : []);
 const snapshot = (s) => JSON.parse(JSON.stringify(Object.fromEntries(GEOM_KEYS.map((k) => [k, s[k] ?? emptyVal(k)]))));
@@ -75,7 +75,7 @@ function samplePlan() {
     { id: uid('gate'), fenceId: fences[0].id, t: 0.5, width: 4 },
   ];
 
-  return { walls, openings, fences, gates, posts: [], labels: [], stairs: [], equips: [], roomNames: {}, roomLabelPos: {}, roomAffected: {} };
+  return { walls, openings, fences, gates, posts: [], labels: [], stairs: [], equips: [], regions: [], roomNames: {}, roomLabelPos: {}, roomAffected: {} };
 }
 
 // ----- autosave: persist the whole project to localStorage so a refresh (or a
@@ -396,6 +396,18 @@ export const useStore = create((set, get) => ({
     if (m[sig]) delete m[sig]; else m[sig] = true;
     return { roomAffected: m };
   }),
+  // a free-shape affected region (partial wet area) — points in feet, editable
+  addRegion: (points, category = 1) => {
+    if (!points || points.length < 3) return null;
+    const id = uid('region');
+    get().commit((s) => ({ regions: [...(s.regions || []), { id, points: points.map((p) => ({ x: p.x, y: p.y })), category }] }));
+    set({ selection: { type: 'region', id }, multi: [{ type: 'region', id }] });
+    return id;
+  },
+  // move one vertex of a region (no per-tick history; commit on release)
+  moveRegionVertex: (id, idx, pt) => set((s) => ({
+    regions: (s.regions || []).map((r) => r.id === id ? { ...r, points: r.points.map((p, i) => i === idx ? { x: pt.x, y: pt.y } : p) } : r),
+  })),
 
   // ---- generic update of any element (no history per drag-tick; commit on end) ----
   // move a shared corner: set the given endpoints (joints = [{id, end}]) of one
@@ -510,6 +522,7 @@ export const useStore = create((set, get) => ({
     if (ids.fence) out.fences = s.fences.map((f) => ids.fence.has(f.id) ? seg(f) : f);
     if (ids.stair) out.stairs = s.stairs.map((st) => ids.stair.has(st.id) ? { ...st, x: st.x + dx, y: st.y + dy } : st);
     if (ids.equip) out.equips = s.equips.map((eq) => ids.equip.has(eq.id) ? { ...eq, x: eq.x + dx, y: eq.y + dy } : eq);
+    if (ids.region) out.regions = s.regions.map((r) => ids.region.has(r.id) ? { ...r, points: r.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) } : r);
     if (ids.label) out.labels = s.labels.map((l) => ids.label.has(l.id) ? { ...l, pos: { x: l.pos.x + dx, y: l.pos.y + dy }, anchor: { x: l.anchor.x + dx, y: l.anchor.y + dy } } : l);
     return out;
   }),
@@ -528,6 +541,7 @@ export const useStore = create((set, get) => ({
       if (ids.fence) out.fences = s.fences.map((f) => ids.fence.has(f.id) ? seg(f) : f);
       if (ids.stair) out.stairs = s.stairs.map((st) => ids.stair.has(st.id) ? { ...st, x: st.x + mx, y: st.y + my } : st);
       if (ids.equip) out.equips = s.equips.map((eq) => ids.equip.has(eq.id) ? { ...eq, x: eq.x + mx, y: eq.y + my } : eq);
+      if (ids.region) out.regions = s.regions.map((r) => ids.region.has(r.id) ? { ...r, points: r.points.map((p) => ({ x: p.x + mx, y: p.y + my })) } : r);
       if (ids.label) out.labels = s.labels.map((l) => ids.label.has(l.id) ? { ...l, pos: { x: l.pos.x + mx, y: l.pos.y + my }, anchor: { x: l.anchor.x + mx, y: l.anchor.y + my } } : l);
       for (const type of ['opening', 'gate', 'post']) if (ids[type]) out[type + 's'] = s[type + 's'].map((e) => ids[type].has(e.id) ? { ...e, t: Math.max(0, Math.min(1, e.t + dx * 0.04)) } : e);
       return out;
@@ -539,7 +553,7 @@ export const useStore = create((set, get) => ({
     set((s) => ({
       past: [...s.past, snapshot(s)],
       future: [],
-      walls: [], openings: [], fences: [], gates: [], posts: [], labels: [], stairs: [], equips: [], roomNames: {}, roomLabelPos: {}, roomAffected: {},
+      walls: [], openings: [], fences: [], gates: [], posts: [], labels: [], stairs: [], equips: [], regions: [], roomNames: {}, roomLabelPos: {}, roomAffected: {},
       selection: null,
     })),
 
@@ -600,7 +614,7 @@ export const useStore = create((set, get) => ({
       return {
         past: [], future: [], selection: null, elevationTarget: null,
         pages: [{ id: 'page1', name: 'Page 1' }], activePage: 'page1', pageStore: {},
-        walls: data.walls || [], openings: data.openings || [], fences: data.fences || [], gates: data.gates || [], posts: data.posts || [], labels: data.labels || [], stairs: data.stairs || [], equips: data.equips || [], roomNames: data.roomNames || {}, roomLabelPos: data.roomLabelPos || {}, roomAffected: data.roomAffected || {},
+        walls: data.walls || [], openings: data.openings || [], fences: data.fences || [], gates: data.gates || [], posts: data.posts || [], labels: data.labels || [], stairs: data.stairs || [], equips: data.equips || [], regions: data.regions || [], roomNames: data.roomNames || {}, roomLabelPos: data.roomLabelPos || {}, roomAffected: data.roomAffected || {},
       };
     }),
 }));

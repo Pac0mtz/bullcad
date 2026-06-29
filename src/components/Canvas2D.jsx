@@ -21,7 +21,7 @@ export default function Canvas2D() {
   const layerRef = useRef(null);
 
   const store = useStore();
-  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, posts, labels, stairs, equips, selection, multi, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, roomLabelSize, layers, detachCorner, roomNames, roomLabelPos, roomAffected, equipmentKind } = store;
+  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, posts, labels, stairs, equips, regions, selection, multi, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, roomLabelSize, layers, detachCorner, roomNames, roomLabelPos, roomAffected, equipmentKind } = store;
   // closed wall loops → rooms. Always detected so the interior gets a white
   // floor; the `showRoomAreas` toggle only governs the numeric area label.
   // Each room carries its bounding-wall ids, a stable signature, its name, and
@@ -57,6 +57,11 @@ export default function Canvas2D() {
   const [sketch, setSketch] = useState([]); // array of strokes; each is [{x,y}]
   const [liveStroke, setLiveStroke] = useState(null); // current stroke points
   const liveRef = useRef([]); // accumulator for the active stroke
+  // affected-region drawing (restoration): click-corners draft + live freehand stroke
+  const [regionDraft, setRegionDraft] = useState(null); // [{x,y}] in-progress polygon (taps)
+  const [liveRegion, setLiveRegion] = useState(null);    // freehand stroke points
+  const regionLiveRef = useRef([]);
+  const regionSuppress = useRef(false); // skip the onClick right after a freehand drag
   const drag = useRef(null); // active handle drag
   const runPath = useRef([]); // points clicked in the current wall run (for the room-area label)
   const marq = useRef(null);  // active marquee drag
@@ -145,6 +150,41 @@ export default function Canvas2D() {
   useEffect(() => { setDraft(null); setRunStart(null); setMeasure([]); setLenStr(''); }, [tool]);
   // leaving the Sketch tool discards any un-straightened ink
   useEffect(() => { if (tool !== 'pencil') { setSketch([]); setLiveStroke(null); liveRef.current = []; } }, [tool]);
+  // leaving the affected-region tool drops any in-progress polygon
+  useEffect(() => { if (tool !== 'region') { setRegionDraft(null); setLiveRegion(null); regionLiveRef.current = []; } }, [tool]);
+
+  // ---- affected-region capture: drag = freehand outline, tap = add a corner ----
+  useEffect(() => {
+    if (tool !== 'region') return;
+    const container = stageRef.current?.container();
+    if (!container) return;
+    const toFeet = (clientX, clientY) => {
+      const r = container.getBoundingClientRect();
+      const v = viewRef.current, sc = scaleRef.current;
+      return { x: ((clientX - r.left) - v.x) / (v.k * sc), y: ((clientY - r.top) - v.y) / (v.k * sc) };
+    };
+    let down = null, dragging = false;
+    const onDown = (e) => { if (e.pointerType === 'touch') return; down = { x: e.clientX, y: e.clientY }; dragging = false; regionLiveRef.current = [toFeet(e.clientX, e.clientY)]; };
+    const onMove = (e) => {
+      if (!down) return;
+      if (!dragging && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) dragging = true;
+      if (dragging) { const p = toFeet(e.clientX, e.clientY); const last = regionLiveRef.current[regionLiveRef.current.length - 1]; if (!last || Math.hypot(p.x - last.x, p.y - last.y) > 0.1) { regionLiveRef.current.push(p); setLiveRegion([...regionLiveRef.current]); } }
+    };
+    const onUp = () => {
+      if (!down) return;
+      const wasDrag = dragging; down = null; dragging = false;
+      if (wasDrag) {
+        const pts = regionLiveRef.current; regionLiveRef.current = []; setLiveRegion(null);
+        if (pts.length >= 3) { const simp = simplifyPath(pts, 0.4); if (simp.length >= 3) { store.addRegion(simp); setRegionDraft(null); } }
+        regionSuppress.current = true; setTimeout(() => { regionSuppress.current = false; }, 60); // eat the trailing click
+      }
+    };
+    container.addEventListener('pointerdown', onDown);
+    container.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    container.style.cursor = 'crosshair';
+    return () => { container.removeEventListener('pointerdown', onDown); container.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); container.style.cursor = ''; };
+  }, [tool]);
 
   // ---- freehand Sketch capture (Apple Pencil / mouse draws; finger pans) ----
   // Uses raw PointerEvents so we can tell a pen/mouse (draw) from touch (ignore,
@@ -384,6 +424,7 @@ export default function Canvas2D() {
       if (layers.fences) fences.forEach((f) => { if (inside(f.a) && inside(f.b)) items.push({ type: 'fence', id: f.id }); });
       if (layers.stairs) stairs.forEach((s) => { if (inside({ x: s.x, y: s.y })) items.push({ type: 'stair', id: s.id }); });
       if (layers.equipment) equips.forEach((eq) => { if (inside({ x: eq.x, y: eq.y })) items.push({ type: 'equip', id: eq.id }); });
+      regions.forEach((rg) => { const c = rg.points.reduce((a, p) => ({ x: a.x + p.x / rg.points.length, y: a.y + p.y / rg.points.length }), { x: 0, y: 0 }); if (inside(c)) items.push({ type: 'region', id: rg.id }); });
       if (layers.labels) labels.forEach((l) => { if (inside(l.pos)) items.push({ type: 'label', id: l.id }); });
       const merged = m.add ? [...store.multi.filter((a) => !items.some((b) => b.id === a.id)), ...items] : items;
       store.selectMany(merged);
@@ -481,6 +522,16 @@ export default function Canvas2D() {
       const inPoly = (pt, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const A = poly[i], B = poly[j]; if (((A.y > pt.y) !== (B.y > pt.y)) && (pt.x < (B.x - A.x) * (pt.y - A.y) / ((B.y - A.y) || 1e-9) + A.x)) c = !c; } return c; };
       const hit = rooms.find((rm) => inPoly(raw, rm.polygon) && !(rm.holes || []).some((h) => inPoly(raw, h)));
       if (hit) store.toggleAffected(hit.sig);
+    } else if (tool === 'region') {
+      // click-to-add a corner; click near the first corner (≥3 pts) to close
+      if (regionSuppress.current) return; // a freehand drag just finished
+      const pt = snapEnabled ? snapPt(raw, minorStep) : raw;
+      setRegionDraft((d) => {
+        const arr = d ? [...d] : [];
+        if (arr.length >= 3 && dist(pt, arr[0]) < 0.6) { store.addRegion(arr); return null; }
+        arr.push({ x: pt.x, y: pt.y });
+        return arr;
+      });
     } else if (tool === 'zoom') {
       // click to zoom in at the point; Alt/Shift-click to zoom out
       const ptr = stageRef.current.getPointerPosition();
@@ -491,7 +542,10 @@ export default function Canvas2D() {
     }
   };
 
-  const onDblClick = () => { if (tool === 'wall' || tool === 'fence') finishRun(true); };
+  const onDblClick = () => {
+    if (tool === 'region') { setRegionDraft((d) => { if (d && d.length >= 3) store.addRegion(d); return null; }); return; }
+    if (tool === 'wall' || tool === 'fence') finishRun(true);
+  };
 
   // single-finger pan (Konva Stage touch events); a small move stays a tap so
   // Konva still fires onTap → place/select
@@ -625,6 +679,10 @@ export default function Canvas2D() {
       const sp = snapEnabled ? snapPt(raw, minorStep) : raw;
       const dx = sp.x - d.last.x, dy = sp.y - d.last.y;
       if (dx || dy) { store.translateSelection(d.items, dx, dy); d.last = sp; }
+      return;
+    }
+    if (d.kind === 'regionVertex') {
+      store.moveRegionVertex(d.id, d.idx, snapEnabled ? snapPt(raw, minorStep) : raw);
       return;
     }
     if (d.kind === 'wallEnd' || d.kind === 'fenceEnd') {
@@ -950,6 +1008,24 @@ export default function Canvas2D() {
               ctx.fill('evenodd');
             }} />
           ) : null)}
+
+          {/* free-shape affected regions (partial wet areas) — amber overlay, selectable */}
+          {regions.map((rg) => {
+            const sel = selection?.type === 'region' && (selection.id === rg.id || multiSet.has(rg.id));
+            const pts = rg.points.flatMap((p) => [p.x * scale, p.y * scale]);
+            const startMove = (e) => {
+              e.cancelBubble = true;
+              if (tool !== 'select') return;
+              store.select({ type: 'region', id: rg.id });
+              const raw = getFeet();
+              drag.current = { kind: 'group', items: [{ type: 'region', id: rg.id }], last: raw ? (snapEnabled ? snapPt(raw, minorStep) : raw) : { x: 0, y: 0 }, moved: false, before: useStore.getState().snapshotGeom() };
+            };
+            return (
+              <Line key={rg.id} points={pts} closed fill="rgba(245,158,11,0.28)"
+                stroke={sel ? '#b45309' : 'rgba(180,83,9,0.55)'} strokeWidth={(sel ? 1.8 : 1) / view.k} hitStrokeWidth={6 / view.k}
+                onMouseDown={startMove} onTouchStart={startMove} />
+            );
+          })}
 
           {/* fences (under walls) */}
           {layers.fences && fences.map((f) => (
@@ -1290,6 +1366,30 @@ export default function Canvas2D() {
               hovered={hoverId === eq.id} onHover={tool === 'select' ? setHoverId : undefined}
               onSelect={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'equip', id: eq.id }); startHandle({ kind: 'equip', id: eq.id })(e); } }} />
           ))}
+
+          {/* selected region: corner handles to reshape it */}
+          {(() => {
+            const sr = selection?.type === 'region' ? regions.find((r) => r.id === selection.id) : null;
+            if (!sr) return null;
+            return sr.points.map((p, i) => (
+              <Circle key={'rv' + i} x={p.x * scale} y={p.y * scale} radius={6 / view.k} fill="#fff" stroke="#b45309" strokeWidth={2 / view.k} hitStrokeWidth={22 / view.k}
+                onMouseDown={startHandle({ kind: 'regionVertex', id: sr.id, idx: i })} onTouchStart={startHandle({ kind: 'regionVertex', id: sr.id, idx: i })} />
+            ));
+          })()}
+
+          {/* affected-region drawing preview (click-corners chain + live freehand) */}
+          {tool === 'region' && (regionDraft || liveRegion) && (
+            <Group listening={false}>
+              {regionDraft && regionDraft.length > 0 && (
+                <>
+                  <Line points={[...regionDraft.flatMap((p) => [p.x * scale, p.y * scale]), ...(cursor ? [cursor.x * scale, cursor.y * scale] : [])]}
+                    stroke="#b45309" strokeWidth={1.5 / view.k} dash={[6 / view.k, 4 / view.k]} />
+                  {regionDraft.map((p, i) => <Circle key={i} x={p.x * scale} y={p.y * scale} radius={4 / view.k} fill="#b45309" />)}
+                </>
+              )}
+              {liveRegion && <Line points={liveRegion.flatMap((p) => [p.x * scale, p.y * scale])} stroke="#b45309" strokeWidth={2 / view.k} tension={0.3} lineCap="round" lineJoin="round" />}
+            </Group>
+          )}
 
           {/* alignment guides while dragging a component */}
           {guides.length > 0 && (

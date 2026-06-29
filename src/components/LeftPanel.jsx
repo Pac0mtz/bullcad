@@ -156,11 +156,15 @@ export default function LeftPanel({ onCollapse }) {
           })}
           <div className={'lib-item' + (tool === 'affected' ? ' active' : '')} onClick={() => setTool('affected')}>
             <div className="ico"><IconDroplet style={{ width: 24, height: 24, color: '#d97706' }} /></div>
-            <div className="nm">Affected area</div>
+            <div className="nm">Affected room</div>
+          </div>
+          <div className={'lib-item' + (tool === 'region' ? ' active' : '')} onClick={() => setTool('region')}>
+            <div className="ico"><IconDroplet style={{ width: 24, height: 24, color: '#b45309' }} /></div>
+            <div className="nm">Affected region</div>
           </div>
         </div>
         <p className="empty-note" style={{ marginTop: 8 }}>
-          Pick a component and click the plan to drop it (numbered automatically). <b>Affected area</b>: click a room to shade it as water-affected. Counts show in <b>Quantities</b>.
+          Pick a component and click the plan to drop it (numbered automatically). <b>Affected room</b>: click a room to shade it whole. <b>Affected region</b>: drag to trace a partial wet area, or click corners then double-click to close — then drag its corners to reshape. Counts in <b>Quantities</b>.
         </p>
       </Section>
 

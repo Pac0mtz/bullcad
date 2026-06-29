@@ -1,7 +1,9 @@
 import { dist, postsAlong, FENCE_TYPES, WALL_MATERIALS, EQUIPMENT } from './geometry.js';
 
 // Compute the full bill-of-quantities from the geometry model.
-export function computeQuantities({ walls, openings, fences, gates, posts = [], equips = [], roomAffected = {} }) {
+const polyArea = (pts) => { let A = 0; for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; A += p.x * q.y - q.x * p.y; } return Math.abs(A) / 2; };
+
+export function computeQuantities({ walls, openings, fences, gates, posts = [], equips = [], roomAffected = {}, regions = [] }) {
   // Wall linear footage — total, exterior/interior split, and by material
   let wallLF = 0, wallExtLF = 0, wallIntLF = 0;
   const wallByMaterial = {};
@@ -61,11 +63,15 @@ export function computeQuantities({ walls, openings, fences, gates, posts = [], 
     equipByKind[k].count += 1;
   }
   const affectedRooms = Object.keys(roomAffected || {}).length;
+  const affectedRegions = (regions || []).length;
+  const affectedRegionArea = (regions || []).reduce((s, r) => s + polyArea(r.points || []), 0);
 
   return {
     equipByKind,
     equipCount: (equips || []).length,
     affectedRooms,
+    affectedRegions,
+    affectedRegionArea,
     wallLF,
     wallExtLF,
     wallIntLF,
