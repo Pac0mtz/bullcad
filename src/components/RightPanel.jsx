@@ -8,16 +8,14 @@ import FenceGlyph from './FenceGlyph.jsx';
 
 // Editable wall length: type a new length and the far end (b) moves along the
 // wall direction so the wall becomes exactly that length. Anchor end (a) stays.
-function LengthField({ el, commitSet }) {
+function LengthField({ el }) {
   const len = dist(el.a, el.b);
+  const resizeWall = useStore((s) => s.resizeWall);
   const [txt, setTxt] = useState(null); // null = not editing → show formatted
   const apply = () => {
     const L = parseLength(txt);
     setTxt(null);
-    if (L > 0.1) {
-      const d = dist(el.a, el.b) || 1;
-      commitSet({ b: { x: el.a.x + (el.b.x - el.a.x) / d * L, y: el.a.y + (el.b.y - el.a.y) / d * L } });
-    }
+    if (L > 0.1) resizeWall(el.id, L); // moves the far corner + any walls joined there
   };
   return (
     <div className="field">
@@ -58,7 +56,7 @@ function ElevationButton({ type, id }) {
 function RoomProps({ sig, area, wallCount }) {
   const stored = useStore((s) => (s.roomNames || {})[sig] || '');
   const setRoomName = useStore((s) => s.setRoomName);
-  const del = useStore((s) => s.deleteSelected);
+  const del = useStore((s) => s.deleteRoom);
   const labelSize = useStore((s) => s.roomLabelSize);
   const setDefault = useStore((s) => s.setDefault);
   const [txt, setTxt] = useState(stored);
@@ -76,7 +74,7 @@ function RoomProps({ sig, area, wallCount }) {
         onChange={(v) => setDefault('roomLabelSize', Math.max(8, Math.min(28, Math.round(v))))} />
       <p className="empty-note">Applies to every room label (name &amp; area), on screen and in the PDF.</p>
       <p className="empty-note">Area <b>{area} sq ft</b>{wallCount ? ` · ${wallCount} walls` : ''}. Drag the room floor on the canvas to move the whole room together.</p>
-      <button className="btn danger del-btn" onClick={del}><IconTrash style={{ width: 16, height: 16 }} /> Delete room</button>
+      <button className="btn danger del-btn" onClick={() => del()}><IconTrash style={{ width: 16, height: 16 }} /> Delete room</button>
     </div>
   );
 }
@@ -100,6 +98,7 @@ function SelectedProps() {
   const del = useStore((s) => s.deleteSelected);
   const splitWall = useStore((s) => s.splitWall);
   const applyWallStyleToAll = useStore((s) => s.applyWallStyleToAll);
+  const weldWalls = useStore((s) => s.weldWalls);
 
   if (!sel) {
     if (multi.length > 1) {
@@ -136,7 +135,7 @@ function SelectedProps() {
         return (
           <>
             <ElevationButton type="wall" id={el.id} />
-            <LengthField el={el} commitSet={commitSet} />
+            <LengthField el={el} />
             <div className="field">
               <label>Wall line on <span className="muted">(all walls)</span></label>
               <select value={wallJustify} onChange={(e) => setDefault('wallJustify', e.target.value)}>
@@ -199,6 +198,8 @@ function SelectedProps() {
               <button className="btn soft" style={{ width: '100%' }}
                 onClick={() => applyWallStyleToAll(el.id)} title="Apply this wall's thickness, height, color and material to every wall">≡ Match all</button>
             </div>
+            <button className="btn soft" style={{ width: '100%', marginTop: 6 }}
+              onClick={() => weldWalls()} title="Split walls at junctions and merge overlapping/shared walls into clean single edges">⌗ Clean up walls</button>
             <p className="empty-note" style={{ marginTop: 8 }}>Drag the round corner handle to move joined walls together; the amber ◆ splits off just this wall (or hold Alt).</p>
 
             <div className="prop-subhead">Dimensions</div>

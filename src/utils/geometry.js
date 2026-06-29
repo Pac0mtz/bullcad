@@ -660,6 +660,110 @@ function insetPolygon(poly, walls) {
   return { polygon: inner, area: area(inner) };
 }
 
+// ---- planar arrangement (Option C: rooms = faces, shared walls = one edge) ----
+// Turn the wall list into a clean planar subdivision: split every wall at
+// junctions (a neighbour's endpoint on its mid-span) and true crossings, then
+// merge coincident collinear sub-segments into ONE shared edge. Openings are
+// re-homed onto the sub-segment that still covers their absolute position.
+// Returns { walls, openings, changed } — pure; callers commit the result.
+export const WELD_TOL = 0.04; // ft (~1/2") snap tolerance for welding nodes
+
+export function planarizeWalls(walls, openings = []) {
+  const all = walls || [];
+  const valid = all.filter((w) => w && w.a && w.b && dist(w.a, w.b) > WELD_TOL);
+  if (valid.length < 2) return { walls: all, openings: openings || [], changed: false };
+
+  // 1 + 2: split each wall at every junction / crossing → sub-segments w/ provenance
+  const subs = []; // { a, b, srcId, src }
+  let didSplit = false;
+  for (const s of valid) {
+    const a = s.a, b = s.b;
+    const dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy || 1, L = Math.sqrt(L2);
+    const ts = [0, 1];
+    for (const o of valid) {
+      if (o === s) continue;
+      // (a) o's endpoints landing on s's interior → T-junction / collinear overlap
+      for (const P of [o.a, o.b]) {
+        const t = ((P.x - a.x) * dx + (P.y - a.y) * dy) / L2;
+        if (t > 1e-4 && t < 1 - 1e-4) {
+          const px = a.x + dx * t, py = a.y + dy * t;
+          if (Math.hypot(P.x - px, P.y - py) < WELD_TOL) ts.push(t);
+        }
+      }
+      // (b) true crossing of the two interiors → X-junction
+      const od = { x: o.b.x - o.a.x, y: o.b.y - o.a.y };
+      const X = lineIntersect(a, { x: dx, y: dy }, o.a, od);
+      if (X) {
+        const t = ((X.x - a.x) * dx + (X.y - a.y) * dy) / L2;
+        const u = ((X.x - o.a.x) * od.x + (X.y - o.a.y) * od.y) / ((od.x * od.x + od.y * od.y) || 1);
+        if (t > 1e-4 && t < 1 - 1e-4 && u > 1e-4 && u < 1 - 1e-4) ts.push(t);
+      }
+    }
+    ts.sort((p, q) => p - q);
+    const uniq = [];
+    for (const t of ts) if (!uniq.length || t - uniq[uniq.length - 1] > WELD_TOL / L) uniq.push(t);
+    if (uniq.length > 2) didSplit = true;
+    for (let i = 0; i < uniq.length - 1; i++) {
+      const t0 = uniq[i], t1 = uniq[i + 1];
+      subs.push({ a: { x: a.x + dx * t0, y: a.y + dy * t0 }, b: { x: a.x + dx * t1, y: a.y + dy * t1 }, srcId: s.id, src: s });
+    }
+  }
+
+  // 3: merge coincident sub-segments (same endpoint pair within tol, either order)
+  const key = (p) => `${Math.round(p.x / WELD_TOL)},${Math.round(p.y / WELD_TOL)}`;
+  const groups = new Map();
+  for (const su of subs) {
+    const ka = key(su.a), kb = key(su.b);
+    if (ka === kb) continue; // degenerate sliver
+    const ek = ka < kb ? ka + '|' + kb : kb + '|' + ka;
+    if (!groups.has(ek)) groups.set(ek, { a: su.a, b: su.b, members: [] });
+    groups.get(ek).members.push(su);
+  }
+
+  let didMerge = false;
+  const outWalls = [];
+  const usedIds = new Set();
+  const bySource = new Map(); // srcId -> [output wall, …] (for opening re-home)
+  for (const g of groups.values()) {
+    if (g.members.length > 1) didMerge = true;
+    // attribute precedence: exterior wins, else thickest
+    let winner = g.members[0].src;
+    for (const m of g.members) {
+      const w = m.src;
+      if ((w.exterior && !winner.exterior) || (!!w.exterior === !!winner.exterior && (w.thickness || 0) > (winner.thickness || 0))) winner = w;
+    }
+    // stable id: reuse a member's source id (prefer winner's) so untouched walls,
+    // room signatures and selection survive across a weld
+    let id = null;
+    for (const cid of [winner.id, ...g.members.map((m) => m.srcId)]) { if (cid && !usedIds.has(cid)) { id = cid; break; } }
+    if (!id) id = uid('wall');
+    usedIds.add(id);
+    const wall = {
+      id, a: { x: g.a.x, y: g.a.y }, b: { x: g.b.x, y: g.b.y },
+      thickness: winner.thickness, height: winner.height, color: winner.color, material: winner.material,
+      ...(winner.exterior ? { exterior: true } : {}), ...(winner.justify ? { justify: winner.justify } : {}),
+    };
+    outWalls.push(wall);
+    for (const m of g.members) { if (!bySource.has(m.srcId)) bySource.set(m.srcId, []); if (!bySource.get(m.srcId).includes(wall)) bySource.get(m.srcId).push(wall); }
+  }
+
+  const changed = didSplit || didMerge || outWalls.length !== valid.length;
+  if (!changed) return { walls: all, openings: openings || [], changed: false };
+
+  // re-home openings onto the sub-segment (from their original host) covering them
+  const outOpenings = (openings || []).map((o) => {
+    const host = all.find((w) => w.id === o.wallId);
+    if (!host) return o;
+    const P = { x: host.a.x + (host.b.x - host.a.x) * o.t, y: host.a.y + (host.b.y - host.a.y) * o.t };
+    const cands = bySource.get(o.wallId) || outWalls;
+    let best = null, bestD = Infinity;
+    for (const w of cands) { const pr = projectOnSegment(P, w.a, w.b); if (pr.distance < bestD) { bestD = pr.distance; best = { w, t: pr.t }; } }
+    return best && bestD < 0.5 ? { ...o, wallId: best.w.id, t: Math.max(0, Math.min(1, best.t)) } : o;
+  });
+
+  return { walls: outWalls, openings: outOpenings, changed: true };
+}
+
 export function detectRooms(walls) {
   try {
     const Q = (v) => `${Math.round(v.x * 100) / 100},${Math.round(v.y * 100) / 100}`;

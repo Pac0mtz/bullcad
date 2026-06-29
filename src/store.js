@@ -1,5 +1,31 @@
 import { create } from 'zustand';
-import { uid, FENCE_TYPES, OPENING_DEFAULTS, WINDOW_STYLES } from './utils/geometry.js';
+import { uid, FENCE_TYPES, OPENING_DEFAULTS, WINDOW_STYLES, planarizeWalls, detectRooms, roomWalls, roomSignature, dist } from './utils/geometry.js';
+
+// Planarize `walls`/`openings` against the current state `s` and return a commit
+// patch that also migrates room names/label positions (keyed by room signature)
+// to any rooms whose bounding walls were re-split — matched by nearest centroid.
+function weldPatch(s, walls, openings) {
+  const res = planarizeWalls(walls, openings);
+  const outWalls = res.changed ? res.walls : walls;
+  const outOpenings = res.changed ? res.openings : openings;
+  const names = { ...(s.roomNames || {}) }, pos = { ...(s.roomLabelPos || {}) };
+  if (res.changed) {
+    const oldRooms = detectRooms(s.walls), newRooms = detectRooms(outWalls);
+    for (const nr of newRooms) {
+      const nsig = roomSignature(roomWalls(nr, outWalls));
+      if (names[nsig] != null || pos[nsig] != null) continue; // unchanged room keeps its name
+      let bestSig = null, bd = 1.0;
+      for (const orm of oldRooms) {
+        const osig = roomSignature(roomWalls(orm, s.walls));
+        if ((s.roomNames || {})[osig] == null && (s.roomLabelPos || {})[osig] == null) continue;
+        const d = Math.hypot(orm.centroid.x - nr.centroid.x, orm.centroid.y - nr.centroid.y);
+        if (d < bd) { bd = d; bestSig = osig; }
+      }
+      if (bestSig) { if (s.roomNames?.[bestSig] != null) names[nsig] = s.roomNames[bestSig]; if (s.roomLabelPos?.[bestSig] != null) pos[nsig] = s.roomLabelPos[bestSig]; }
+    }
+  }
+  return { walls: outWalls, openings: outOpenings, roomNames: names, roomLabelPos: pos };
+}
 
 // ----- snapshot helpers for undo/redo -----
 const GEOM_KEYS = ['walls', 'openings', 'fences', 'gates', 'posts', 'labels', 'stairs', 'roomNames', 'roomLabelPos'];
@@ -220,9 +246,7 @@ export const useStore = create((set, get) => ({
   // flow so the whole traced run is a single undo.
   addWallSegments: (segs) => {
     if (!segs || !segs.length) return;
-    get().commit((s) => ({
-      walls: [...s.walls, ...segs.map(({ a, b }) => ({ id: uid('wall'), a, b, thickness: s.wallThickness, color: s.wallColor, height: s.wallHeight, material: s.wallMaterial }))],
-    }));
+    get().commit((s) => weldPatch(s, [...s.walls, ...segs.map(({ a, b }) => ({ id: uid('wall'), a, b, thickness: s.wallThickness, color: s.wallColor, height: s.wallHeight, material: s.wallMaterial }))], s.openings));
   },
 
   // split a wall into two halves at its midpoint, re-homing any openings
@@ -250,12 +274,8 @@ export const useStore = create((set, get) => ({
     const y0 = Math.min(p0.y, p1.y), y1 = Math.max(p0.y, p1.y);
     if (x1 - x0 < 0.5 || y1 - y0 < 0.5) return; // too small / degenerate
     const c = [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
-    get().commit((s) => ({
-      walls: [
-        ...s.walls,
-        ...c.map((a, i) => ({ id: uid('wall'), a, b: c[(i + 1) % 4], thickness: s.wallThickness, color: s.wallColor, height: s.wallHeight, material: s.wallMaterial, exterior: true })),
-      ],
-    }));
+    const roomWallsNew = c.map((a, i) => ({ id: uid('wall'), a, b: c[(i + 1) % 4], thickness: get().wallThickness, color: get().wallColor, height: get().wallHeight, material: get().wallMaterial, exterior: true }));
+    get().commit((s) => weldPatch(s, [...s.walls, ...roomWallsNew], s.openings));
   },
 
   // ---- fences ----
@@ -385,6 +405,47 @@ export const useStore = create((set, get) => ({
       if (type === 'fence') { out.gates = s.gates.filter((g) => g.fenceId !== id); out.posts = s.posts.filter((p) => p.fenceId !== id); }
       return out;
     }),
+
+  // ---- planar arrangement (Option C) ----
+  // Rebuild walls as a clean planar subdivision: split at junctions/crossings,
+  // merge overlapping collinear walls into one shared edge, re-home openings.
+  // No-op (no history entry) when nothing actually changes. Returns whether it did.
+  weldWalls: () => {
+    const res = planarizeWalls(get().walls, get().openings);
+    if (!res.changed) return false;
+    get().commit((s) => weldPatch(s, s.walls, s.openings));
+    const ids = new Set(get().walls.map((w) => w.id));
+    const sel = get().selection;
+    if (sel && sel.type === 'wall' && !ids.has(sel.id)) set({ selection: null, multi: [] });
+    return true;
+  },
+
+  // delete a room but KEEP any wall it shares with another room (so the
+  // neighbour stays closed). `wallIds` defaults to the current room selection.
+  deleteRoom: (wallIds) => {
+    const s = get();
+    const ids = wallIds || s.multi.filter((m) => m.type === 'wall').map((m) => m.id);
+    if (!ids.length) { set({ selection: null, multi: [] }); return; }
+    const count = {};
+    for (const r of detectRooms(s.walls)) for (const id of roomWalls(r, s.walls)) count[id] = (count[id] || 0) + 1;
+    const drop = new Set(ids.filter((id) => (count[id] || 0) < 2)); // keep edges shared with another room
+    if (drop.size) get().commit((st) => ({ walls: st.walls.filter((w) => !drop.has(w.id)), openings: st.openings.filter((o) => !drop.has(o.wallId)) }));
+    set({ selection: null, multi: [] });
+  },
+
+  // resize a wall to an exact length by moving its far end — and any walls joined
+  // at that corner move with it, so a welded junction never tears apart.
+  resizeWall: (id, newLen) => {
+    const s = get();
+    const w = s.walls.find((x) => x.id === id);
+    if (!w || !(newLen > 0.05)) return;
+    const d = dist(w.a, w.b) || 1;
+    const nb = { x: w.a.x + (w.b.x - w.a.x) / d * newLen, y: w.a.y + (w.b.y - w.a.y) / d * newLen };
+    const ob = w.b;
+    const ends = new Map();
+    for (const e of s.walls) for (const end of ['a', 'b']) if (dist(e[end], ob) < 0.05) ends.set(e.id, end);
+    get().commit((st) => ({ walls: st.walls.map((e) => ends.has(e.id) ? { ...e, [ends.get(e.id)]: { x: nb.x, y: nb.y } } : e) }));
+  },
 
   // duplicate one element; the copy is offset a little and becomes the selection
   // so you can immediately drag it. Walls/fences/stairs shift by 2 ft; openings

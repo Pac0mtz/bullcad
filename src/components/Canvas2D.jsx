@@ -212,7 +212,7 @@ export default function Canvas2D() {
   const clearSketch = () => { setSketch([]); setLiveStroke(null); liveRef.current = []; };
 
   // finish the current wall/fence run; `toSelect` also drops back to the Select tool
-  const finishRun = (toSelect) => { setDraft(null); setRunStart(null); setLenStr(''); setGuides([]); runPath.current = []; if (toSelect) store.setTool('select'); };
+  const finishRun = (toSelect) => { setDraft(null); setRunStart(null); setLenStr(''); setGuides([]); runPath.current = []; if (toSelect) store.setTool('select'); if (tool === 'wall') store.weldWalls(); };
 
   // when a wall run closes into a loop, drop a draggable area label at the room centroid
   const addRoomAreaLabel = (path) => {
@@ -400,9 +400,11 @@ export default function Canvas2D() {
       }
       if (drag.current) {
         // only record an undo step if the handle actually moved
-        if (drag.current.moved && drag.current.before) useStore.getState().pushPast(drag.current.before);
+        const moved = drag.current.moved, kind = drag.current.kind;
+        if (moved && drag.current.before) useStore.getState().pushPast(drag.current.before);
         drag.current = null;
         setGuides([]);
+        if (moved && /^(wallEnd|wallMove|group)$/.test(kind || '')) useStore.getState().weldWalls();
       }
     };
     window.addEventListener('mousemove', move);
@@ -513,9 +515,11 @@ export default function Canvas2D() {
     if (e.evt.touches.length > 0) return;
     touch.current = null;
     if (drag.current) { // commit the handle drag (mirror the window mouseup)
-      if (drag.current.moved && drag.current.before) useStore.getState().pushPast(drag.current.before);
+      const moved = drag.current.moved, kind = drag.current.kind;
+      if (moved && drag.current.before) useStore.getState().pushPast(drag.current.before);
       drag.current = null;
       setGuides([]);
+      if (moved && /^(wallEnd|wallMove|group)$/.test(kind || '')) useStore.getState().weldWalls();
     }
   };
 
