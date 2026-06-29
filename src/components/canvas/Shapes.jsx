@@ -1,6 +1,6 @@
 import React from 'react';
 import { Group, Line, Rect, Circle, Text, Arc, Arrow } from 'react-konva';
-import { dist, lerp, angleOf, dirNormal, formatFeetInches, postsAlong, FENCE_TYPES, windowBars, wallDimGeometry, wallOpeningDimGeometry, WINDOW_STYLES, stairGeometry } from '../../utils/geometry.js';
+import { dist, lerp, angleOf, dirNormal, formatFeetInches, postsAlong, FENCE_TYPES, windowBars, wallDimGeometry, wallOpeningDimGeometry, WINDOW_STYLES, stairGeometry, EQUIPMENT } from '../../utils/geometry.js';
 
 const TEAL = '#14b8a6';
 const NAVY = '#0a2540';
@@ -516,6 +516,38 @@ export function LabelShape({ label, scale, selected, hovered, onPillDown, onAnch
           stroke={(selected || hovered) ? BLUE : borderColor} strokeWidth={(selected || hovered) ? 2 : 1.5}
           shadowColor="#0a2540" shadowBlur={3} shadowOpacity={0.16} />
         <Text x={-w / 2} y={-hh / 2 + 4} width={w} align="center" text={text} fontSize={fs} lineHeight={1.35} fontStyle="600" fill="#1e293b" listening={false} />
+      </Group>
+    </Group>
+  );
+}
+
+// ---------------- RESTORATION EQUIPMENT (air mover / dehu / scrubber / heater / moisture) ----------------
+// A constant-screen-size symbol dropped on the drying map: a colored token with
+// the kind code + auto-number (AM1, DH1…). Air movers show an airflow arrow that
+// follows their rotation; the code label stays upright.
+export function EquipmentShape({ equip, scale, selected, hovered, onSelect, onHover, zoom = 1 }) {
+  const meta = EQUIPMENT[equip.kind] || EQUIPMENT.airMover;
+  const inv = 1 / (zoom || 1);
+  const r = 13; // screen px radius (constant at any zoom)
+  const col = meta.color;
+  const sel = selected || hovered;
+  const label = meta.code + (equip.num || '');
+  const hov = onHover ? {
+    onMouseEnter: (e) => { onHover(equip.id); const st = e.target.getStage(); if (st) st.container().style.cursor = 'pointer'; },
+    onMouseLeave: (e) => { onHover(null); const st = e.target.getStage(); if (st) st.container().style.cursor = ''; },
+  } : {};
+  return (
+    <Group x={equip.x * scale} y={equip.y * scale} onMouseDown={(e) => onSelect(e)} onTouchStart={(e) => onSelect(e)} {...hov}>
+      {/* token + (rotatable) airflow arrow */}
+      <Group scaleX={inv} scaleY={inv} rotation={equip.rotation || 0}>
+        {meta.dir && <Line points={[0, -r - 8, -5, -r - 1, 5, -r - 1]} closed fill={col} listening={false} />}
+        <Circle radius={r} fill="#fff" stroke={col} strokeWidth={sel ? 2.6 : 1.8} hitStrokeWidth={10} />
+        <Circle radius={r} fill={col} opacity={0.14} listening={false} />
+        {sel && <Circle radius={r + 3} stroke={col} strokeWidth={1} dash={[3, 2]} listening={false} />}
+      </Group>
+      {/* code + number, kept upright regardless of rotation */}
+      <Group scaleX={inv} scaleY={inv} listening={false}>
+        <Text x={-r} y={-5} width={2 * r} align="center" text={label} fontSize={10} fontStyle="700" fill={col} />
       </Group>
     </Group>
   );

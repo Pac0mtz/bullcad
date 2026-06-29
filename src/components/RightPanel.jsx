@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store.js';
 import { Section, PanelHead } from './ui.jsx';
-import { dist, formatFeetInches, parseLength, detectRooms, roomWalls, roomSignature, FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS, STAIR_TYPES, STAIR_TYPE_ORDER } from '../utils/geometry.js';
+import { dist, formatFeetInches, parseLength, detectRooms, roomWalls, roomSignature, FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS, STAIR_TYPES, STAIR_TYPE_ORDER, EQUIPMENT } from '../utils/geometry.js';
 import { computeQuantities, quantitiesRows } from '../utils/quantities.js';
 import { IconTrash } from './Icons.jsx';
 import FenceGlyph from './FenceGlyph.jsx';
@@ -89,6 +89,7 @@ function SelectedProps() {
   const posts = useStore((s) => s.posts);
   const labels = useStore((s) => s.labels);
   const stairs = useStore((s) => s.stairs);
+  const equips = useStore((s) => s.equips);
   const wallHeightDefault = useStore((s) => s.wallHeight);
   const dimOffsetDefault = useStore((s) => s.dimOffset);
   const wallJustify = useStore((s) => s.wallJustify);
@@ -120,7 +121,7 @@ function SelectedProps() {
     return <RoomProps key={sel.id} sig={sel.id} area={match ? Math.round(match.r.area) : 0} wallCount={multi.length} />;
   }
 
-  const list = { wall: walls, opening: openings, fence: fences, gate: gates, post: posts, label: labels, stair: stairs }[sel.type];
+  const list = { wall: walls, opening: openings, fence: fences, gate: gates, post: posts, label: labels, stair: stairs, equip: equips }[sel.type];
   const el = list.find((e) => e.id === sel.id);
   if (!el) return <p className="empty-note">Selection no longer exists.</p>;
 
@@ -528,6 +529,20 @@ function SelectedProps() {
         </>
       )}
 
+      {sel.type === 'equip' && (() => {
+        const meta = EQUIPMENT[el.kind] || {};
+        return (
+          <>
+            <p className="empty-note" style={{ marginTop: 0 }}>
+              <b>{meta.label || 'Equipment'} {meta.code}{el.num || ''}</b> — drying-map component. Drag it on the plan to reposition.
+            </p>
+            <Num label="Rotation" suffix="deg" step={15} min={0} max={360}
+              value={Math.round(el.rotation || 0)} onChange={(v) => commitSet({ rotation: ((v % 360) + 360) % 360 })} />
+            <p className="empty-note">Rotation aims the air-mover arrow / orients the symbol.</p>
+          </>
+        );
+      })()}
+
       <button className="btn danger del-btn" onClick={del}><IconTrash style={{ width: 16, height: 16 }} /> Delete</button>
     </div>
   );
@@ -539,10 +554,12 @@ function Quantities() {
   const fences = useStore((s) => s.fences);
   const gates = useStore((s) => s.gates);
   const posts = useStore((s) => s.posts);
+  const equips = useStore((s) => s.equips);
+  const roomAffected = useStore((s) => s.roomAffected);
   const exportPlan = useStore((s) => s.exportPlan);
   const [copied, setCopied] = useState('');
 
-  const q = computeQuantities({ walls, openings, fences, gates, posts });
+  const q = computeQuantities({ walls, openings, fences, gates, posts, equips, roomAffected });
   const rows = quantitiesRows(q);
 
   const copyTable = () => {
@@ -587,6 +604,19 @@ function Quantities() {
           ))}
           <tr className="total"><td>Gates</td><td className="val">{q.gateCount}</td></tr>
           <tr><td>Posts</td><td className="val">{q.postCount}</td></tr>
+          {(q.equipCount > 0 || q.affectedRooms > 0) && (
+            <tr className="total"><td>Restoration equipment</td><td className="val">{q.equipCount}</td></tr>
+          )}
+          {Object.entries(q.equipByKind).map(([k, v]) => (
+            <tr key={k}><td style={{ paddingLeft: 14 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ width: 12, height: 12, borderRadius: 3, background: v.color }} />
+                {v.label}
+              </span></td><td className="val">{v.count}</td></tr>
+          ))}
+          {q.affectedRooms > 0 && (
+            <tr><td>Affected rooms</td><td className="val">{q.affectedRooms}</td></tr>
+          )}
         </tbody>
       </table>
 

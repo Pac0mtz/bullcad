@@ -6,7 +6,7 @@ import { jsPDF } from 'jspdf';
 import { svg2pdf } from 'svg2pdf.js';
 import {
   dist, lerp, angleOf, centroidOf, wallDimGeometry, wallOpeningDimGeometry, justifiedSegments, wallPolygons, WINDOW_STYLES, FENCE_TYPES, postsAlong,
-  formatFeetInches, windowBars, stairGeometry, detectRooms, roomWalls, roomSignature,
+  formatFeetInches, windowBars, stairGeometry, detectRooms, roomWalls, roomSignature, EQUIPMENT,
 } from './geometry.js';
 import { computeQuantities, fenceComponents } from './quantities.js';
 
@@ -51,6 +51,17 @@ export function buildPlanSvg(model, opts = {}) {
   const wSeg = (w) => wallSegs.get(w.id) || { a: w.a, b: w.b };
   const fSeg = (f) => fenceSegs.get(f.id) || { a: f.a, b: f.b };
   const el = [];
+
+  // water-affected room shading (restoration drying map) — drawn first, under the walls
+  const affected = model.roomAffected || {};
+  if (Object.keys(affected).length) {
+    detectRooms(walls).forEach((rm) => {
+      if (!affected[roomSignature(roomWalls(rm, walls))]) return;
+      let d = 'M ' + rm.polygon.map((p) => `${r2(p.x)} ${r2(p.y)}`).join(' L ') + ' Z';
+      (rm.holes || []).forEach((h) => { d += ' M ' + h.map((p) => `${r2(p.x)} ${r2(p.y)}`).join(' L ') + ' Z'; });
+      el.push(`<path d="${d}" fill="rgba(245,158,11,0.22)" fill-rule="evenodd"/>`);
+    });
+  }
 
   // On-page scale (points per foot) so label fonts can be set in real POINTS:
   // the SVG is in feet and gets scaled by `sc` to fit the page. ptFt(10) is the
@@ -291,6 +302,18 @@ export function buildPlanSvg(model, opts = {}) {
     const nameFs = ptFt(10 * rls / 14), areaFs = ptFt(8.5 * rls / 14); // room labels in real points too
     if (name) el.push(roomLabel(cx, cy - (showArea ? areaFs * 0.75 : -areaFs * 0.35), escXml(name), nameFs, true));
     if (showArea) el.push(roomLabel(cx, cy + (name ? nameFs * 0.85 : areaFs * 0.35), `${Math.round(rm.area)} sq ft`, areaFs, false));
+  });
+
+  // restoration drying equipment tokens (on top of everything)
+  (model.equips || []).forEach((eq) => {
+    const meta = EQUIPMENT[eq.kind] || EQUIPMENT.airMover;
+    const R = ptFt(7);
+    let g = `<g transform="translate(${r2(eq.x)},${r2(eq.y)})">`;
+    if (meta.dir) g += `<g transform="rotate(${r2(eq.rotation || 0)})"><polygon points="0,${r2(-R - ptFt(4))} ${r2(-ptFt(2.6))},${r2(-R)} ${r2(ptFt(2.6))},${r2(-R)}" fill="${meta.color}"/></g>`;
+    g += `<circle r="${r2(R)}" fill="#ffffff" stroke="${meta.color}" stroke-width="${r2(ptFt(1.1))}"/>`;
+    g += `<circle r="${r2(R)}" fill="${meta.color}" fill-opacity="0.14"/>`;
+    g += `<text x="0" y="${r2(ptFt(3.5))}" font-size="${r2(ptFt(7))}" font-family="Poppins, Helvetica, Arial, sans-serif" font-weight="700" text-anchor="middle" fill="${meta.color}">${meta.code}${eq.num || ''}</text>`;
+    el.push(g + '</g>');
   });
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${r2(minX)} ${r2(minY)} ${r2(wFt)} ${r2(hFt)}" width="${r2(wFt)}" height="${r2(hFt)}">${el.join('')}</svg>`;

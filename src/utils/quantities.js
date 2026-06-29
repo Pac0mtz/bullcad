@@ -1,7 +1,7 @@
-import { dist, postsAlong, FENCE_TYPES, WALL_MATERIALS } from './geometry.js';
+import { dist, postsAlong, FENCE_TYPES, WALL_MATERIALS, EQUIPMENT } from './geometry.js';
 
 // Compute the full bill-of-quantities from the geometry model.
-export function computeQuantities({ walls, openings, fences, gates, posts = [] }) {
+export function computeQuantities({ walls, openings, fences, gates, posts = [], equips = [], roomAffected = {} }) {
   // Wall linear footage — total, exterior/interior split, and by material
   let wallLF = 0, wallExtLF = 0, wallIntLF = 0;
   const wallByMaterial = {};
@@ -53,7 +53,19 @@ export function computeQuantities({ walls, openings, fences, gates, posts = [] }
   const openingCounts = { door: 0, window: 0, opening: 0 };
   for (const o of openings) openingCounts[o.type] = (openingCounts[o.type] || 0) + 1;
 
+  // Restoration equipment counts by kind (for the drying-map takeoff / equipment-days)
+  const equipByKind = {};
+  for (const e of (equips || [])) {
+    const k = e.kind;
+    if (!equipByKind[k]) equipByKind[k] = { label: EQUIPMENT[k]?.label || k, color: EQUIPMENT[k]?.color || '#64748b', count: 0 };
+    equipByKind[k].count += 1;
+  }
+  const affectedRooms = Object.keys(roomAffected || {}).length;
+
   return {
+    equipByKind,
+    equipCount: (equips || []).length,
+    affectedRooms,
     wallLF,
     wallExtLF,
     wallIntLF,

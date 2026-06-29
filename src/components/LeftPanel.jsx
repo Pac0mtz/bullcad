@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { useStore } from '../store.js';
 import { Section, PanelHead } from './ui.jsx';
-import { FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS } from '../utils/geometry.js';
+import { FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS, EQUIPMENT, EQUIPMENT_ORDER } from '../utils/geometry.js';
+import { IconFan, IconDehu, IconScrubber, IconHeater, IconDroplet } from './Icons.jsx';
 import FenceElevation from './FenceElevation.jsx';
+
+const EQUIP_ICON = { airMover: IconFan, dehu: IconDehu, airScrubber: IconScrubber, heater: IconHeater, sensor: IconDroplet };
 
 // Row of clickable color swatches.
 function Swatches({ value, options, onPick }) {
@@ -57,7 +60,7 @@ function Num({ label, value, onChange, step = 0.5, min = 0, max, suffix }) {
 
 export default function LeftPanel({ onCollapse }) {
   const s = useStore();
-  const { tool, setTool, setDefault, scale, setScale, snapEnabled, setSnap } = s;
+  const { tool, setTool, setDefault, scale, setScale, snapEnabled, setSnap, equipmentKind } = s;
   // accordion: only one section open at a time
   const [openSec, setOpenSec] = useState('tools');
   const sec = (id) => ({ open: openSec === id, onToggle: () => setOpenSec((o) => (o === id ? null : id)) });
@@ -134,6 +137,31 @@ export default function LeftPanel({ onCollapse }) {
             <p className="empty-note">Click on the plan to place the stair. Drag to move; rotate in Properties.</p>
           </div>
         )}
+      </Section>
+
+      {/* Restoration — drying-map equipment + affected-area marking (separate from Tools) */}
+      <Section title="Restoration" {...sec('restoration')}>
+        <div className="lib-grid">
+          {EQUIPMENT_ORDER.map((kind) => {
+            const meta = EQUIPMENT[kind];
+            const Icon = EQUIP_ICON[kind] || IconDroplet;
+            const active = tool === 'equip' && equipmentKind === kind;
+            return (
+              <div key={kind} className={'lib-item' + (active ? ' active' : '')}
+                onClick={() => { setDefault('equipmentKind', kind); setTool('equip'); }}>
+                <div className="ico"><Icon style={{ width: 24, height: 24, color: meta.color }} /></div>
+                <div className="nm">{meta.label}</div>
+              </div>
+            );
+          })}
+          <div className={'lib-item' + (tool === 'affected' ? ' active' : '')} onClick={() => setTool('affected')}>
+            <div className="ico"><IconDroplet style={{ width: 24, height: 24, color: '#d97706' }} /></div>
+            <div className="nm">Affected area</div>
+          </div>
+        </div>
+        <p className="empty-note" style={{ marginTop: 8 }}>
+          Pick a component and click the plan to drop it (numbered automatically). <b>Affected area</b>: click a room to shade it as water-affected. Counts show in <b>Quantities</b>.
+        </p>
       </Section>
 
       {/* Wall options — contextual to the wall/room/select tools */}
@@ -305,6 +333,7 @@ export default function LeftPanel({ onCollapse }) {
           ['fences', 'Fences', s.fences.length],
           ['gates', 'Gates', s.gates.length],
           ['stairs', 'Stairs', s.stairs.length],
+          ['equipment', 'Restoration', (s.equips || []).length],
           ['labels', 'Labels', s.labels.length],
           ['dims', 'Dimensions', null],
         ].map(([key, label, count]) => (

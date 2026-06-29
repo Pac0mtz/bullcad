@@ -41,3 +41,9 @@ export const IconImage = (p) => (<S {...p}><rect x="3" y="4" width="18" height="
 export const IconDuplicate = (p) => (<S {...p}><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></S>);
 export const IconPencil = (p) => (<S {...p}><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" /></S>);
 export const IconMore = (p) => (<S {...p}><circle cx="12" cy="5" r="1.6" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" /><circle cx="12" cy="19" r="1.6" fill="currentColor" stroke="none" /></S>);
+// restoration drying equipment
+export const IconFan = (p) => (<S {...p}><circle cx="12" cy="12" r="1.6" /><path d="M12 10.5c.3-3.5 1-5.5 2.6-5.5 1.8 0 2 2.6-.6 5.2" /><path d="M13.5 12c3.5.3 5.5 1 5.5 2.6 0 1.8-2.6 2-5.2-.6" /><path d="M12 13.5c-.3 3.5-1 5.5-2.6 5.5-1.8 0-2-2.6.6-5.2" /><path d="M10.5 12c-3.5-.3-5.5-1-5.5-2.6 0-1.8 2.6-2 5.2.6" /></S>);
+export const IconDehu = (p) => (<S {...p}><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M12 8c1.6 2 2.6 3.2 2.6 4.6a2.6 2.6 0 0 1-5.2 0C9.4 11.2 10.4 10 12 8z" /></S>);
+export const IconScrubber = (p) => (<S {...p}><rect x="5" y="4" width="14" height="16" rx="2" /><path d="M5 8.5h14M5 12h14M5 15.5h14" /></S>);
+export const IconHeater = (p) => (<S {...p}><path d="M8 4c2 2 2 4 0 6s-2 4 0 6" /><path d="M12 4c2 2 2 4 0 6s-2 4 0 6" /><path d="M16 4c2 2 2 4 0 6s-2 4 0 6" /></S>);
+export const IconDroplet = (p) => (<S {...p}><path d="M12 3c4 5 6 7.6 6 10.5a6 6 0 0 1-12 0C6 10.6 8 8 12 3z" /></S>);

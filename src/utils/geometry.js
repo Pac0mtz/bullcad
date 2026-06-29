@@ -518,6 +518,18 @@ export function wallOpeningDimGeometry(wall, openings, perpOffset, centroid, jus
   return { ticks, witness, segments };
 }
 
+// ----- Restoration drying-equipment palette (placed on a drying map) -----
+// `code` prefixes the auto-number (AM-1, DH-1…); `dir` means the symbol shows a
+// direction (air movers point where they blow).
+export const EQUIPMENT = {
+  airMover:    { code: 'AM', label: 'Air mover',        color: '#2563eb', dir: true },
+  dehu:        { code: 'DH', label: 'Dehumidifier',     color: '#0891b2' },
+  airScrubber: { code: 'AS', label: 'Air scrubber',     color: '#059669' },
+  heater:      { code: 'HT', label: 'Heater',           color: '#ea580c' },
+  sensor:      { code: 'M',  label: 'Moisture point',   color: '#9333ea' },
+};
+export const EQUIPMENT_ORDER = ['airMover', 'dehu', 'airScrubber', 'heater', 'sensor'];
+
 // ----- Wall thickness presets (US framing / masonry), value in inches -----
 export const WALL_PRESETS = [
   { label: 'Standard', inches: 6 },

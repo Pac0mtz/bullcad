@@ -7,7 +7,7 @@ import {
 
 const FENCE_THICK = 0.3; // nominal fence body width (ft) for alignment offset
 import { CANVAS_THEME } from '../utils/theme.js';
-import { WallShape, OpeningShape, FenceShape, GateShape, PostShape, DimLabel, WallDimension, WallOpeningDims, LabelShape, StairShape } from './canvas/Shapes.jsx';
+import { WallShape, OpeningShape, FenceShape, GateShape, PostShape, DimLabel, WallDimension, WallOpeningDims, LabelShape, StairShape, EquipmentShape } from './canvas/Shapes.jsx';
 import { IconZoomIn, IconZoomOut, IconFit, IconTrash, IconDuplicate } from './Icons.jsx';
 import Compass from './Compass.jsx';
 
@@ -21,7 +21,7 @@ export default function Canvas2D() {
   const layerRef = useRef(null);
 
   const store = useStore();
-  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, posts, labels, stairs, selection, multi, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, roomLabelSize, layers, detachCorner, roomNames, roomLabelPos } = store;
+  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, posts, labels, stairs, equips, selection, multi, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, roomLabelSize, layers, detachCorner, roomNames, roomLabelPos, roomAffected, equipmentKind } = store;
   // closed wall loops → rooms. Always detected so the interior gets a white
   // floor; the `showRoomAreas` toggle only governs the numeric area label.
   // Each room carries its bounding-wall ids, a stable signature, its name, and
@@ -383,6 +383,7 @@ export default function Canvas2D() {
       if (layers.walls) walls.forEach((w) => { if (inside(w.a) && inside(w.b)) items.push({ type: 'wall', id: w.id }); });
       if (layers.fences) fences.forEach((f) => { if (inside(f.a) && inside(f.b)) items.push({ type: 'fence', id: f.id }); });
       if (layers.stairs) stairs.forEach((s) => { if (inside({ x: s.x, y: s.y })) items.push({ type: 'stair', id: s.id }); });
+      if (layers.equipment) equips.forEach((eq) => { if (inside({ x: eq.x, y: eq.y })) items.push({ type: 'equip', id: eq.id }); });
       if (layers.labels) labels.forEach((l) => { if (inside(l.pos)) items.push({ type: 'label', id: l.id }); });
       const merged = m.add ? [...store.multi.filter((a) => !items.some((b) => b.id === a.id)), ...items] : items;
       store.selectMany(merged);
@@ -471,6 +472,15 @@ export default function Canvas2D() {
       const id = store.addStair(pt);
       store.setTool('select');
       store.select({ type: 'stair', id });
+    } else if (tool === 'equip') {
+      // drop a drying component and STAY in the tool (you place many at once)
+      const pt = snapEnabled ? snapPt(raw, minorStep) : raw;
+      store.addEquip(equipmentKind, pt);
+    } else if (tool === 'affected') {
+      // toggle the clicked room's water-affected shading
+      const inPoly = (pt, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const A = poly[i], B = poly[j]; if (((A.y > pt.y) !== (B.y > pt.y)) && (pt.x < (B.x - A.x) * (pt.y - A.y) / ((B.y - A.y) || 1e-9) + A.x)) c = !c; } return c; };
+      const hit = rooms.find((rm) => inPoly(raw, rm.polygon) && !(rm.holes || []).some((h) => inPoly(raw, h)));
+      if (hit) store.toggleAffected(hit.sig);
     } else if (tool === 'zoom') {
       // click to zoom in at the point; Alt/Shift-click to zoom out
       const ptr = stageRef.current.getPointerPosition();
@@ -688,6 +698,9 @@ export default function Canvas2D() {
     } else if (d.kind === 'stair') {
       const pt = snapEnabled ? snapPt(raw, minorStep) : raw;
       store.updateElement('stair', d.id, { x: pt.x, y: pt.y });
+    } else if (d.kind === 'equip') {
+      const pt = snapEnabled ? snapPt(raw, minorStep) : raw;
+      store.updateElement('equip', d.id, { x: pt.x, y: pt.y });
     } else if (d.kind === 'stairWidth' || d.kind === 'stairRun' || d.kind === 'stairRotate') {
       const stp = stairs.find((x) => x.id === d.id);
       if (stp) {
@@ -925,6 +938,18 @@ export default function Canvas2D() {
               }} />
             );
           })}
+
+          {/* water-affected room shading (restoration drying map) — amber wash */}
+          {layers.walls && rooms.map((rm, i) => (roomAffected && roomAffected[rm.sig]) ? (
+            <Shape key={'aff' + i} listening={false} perfectDrawEnabled={false} sceneFunc={(ctx) => {
+              const ring = (pts) => { pts.forEach((p, k) => (k ? ctx.lineTo(p.x * scale, p.y * scale) : ctx.moveTo(p.x * scale, p.y * scale))); ctx.closePath(); };
+              ctx.beginPath();
+              ring(rm.polygon);
+              (rm.holes || []).forEach(ring);
+              ctx.fillStyle = 'rgba(245,158,11,0.22)';
+              ctx.fill('evenodd');
+            }} />
+          ) : null)}
 
           {/* fences (under walls) */}
           {layers.fences && fences.map((f) => (
@@ -1256,6 +1281,14 @@ export default function Canvas2D() {
               hovered={hoverId === lb.id} onHover={tool === 'select' ? setHoverId : undefined}
               onPillDown={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'label', id: lb.id }); startHandle({ kind: 'labelPos', id: lb.id })(e); } }}
               onAnchorDown={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'label', id: lb.id }); startHandle({ kind: 'labelAnchor', id: lb.id })(e); } }} />
+          ))}
+
+          {/* restoration drying equipment (air movers / dehus / scrubbers / heaters / moisture) */}
+          {layers.equipment && equips.map((eq) => (
+            <EquipmentShape key={eq.id} equip={eq} scale={scale} zoom={view.k}
+              selected={selection?.id === eq.id || multiSet.has(eq.id)}
+              hovered={hoverId === eq.id} onHover={tool === 'select' ? setHoverId : undefined}
+              onSelect={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'equip', id: eq.id }); startHandle({ kind: 'equip', id: eq.id })(e); } }} />
           ))}
 
           {/* alignment guides while dragging a component */}
