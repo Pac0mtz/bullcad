@@ -46,10 +46,21 @@ function swingGeom(w, inward, hinge = 'left', swing = 'in') {
 // so it's readable; from 1×→4× it grows WITH the plan (so zooming in no longer
 // makes the numbers look tiny next to the enlarged walls); past 4× it's capped so
 // it never bloats. Returns the group scale (applied as scaleX/scaleY).
-const dimScale = (z) => { z = z || 1; return z <= 1 ? 1 / z : z <= 2 ? 1 : 2 / z; };
-// One small size for EVERY dimension number (whole-wall, opening splits, measure)
-// so the plan reads consistently and stays compact when zoomed in.
-const DIM_FS = 7.5;
+// Dimensions are a CONSTANT small screen size at any zoom (like magicplan /
+// Floorplanner / CAD) — the line lengths still scale with the plan, but the text
+// and end markers never bloat as you zoom in.
+const dimScale = (z) => 1 / (z || 1);
+const DIM_FS = 7; // one small size for every dimension number
+
+// Small filled arrowhead, constant screen size, tip at (x,y) pointing along `ang`
+// (degrees). Used at dimension-line ends to point at the wall edge.
+function DimArrow({ x, y, ang, color, inv }) {
+  return (
+    <Group x={x} y={y} rotation={ang} scaleX={inv} scaleY={inv} listening={false}>
+      <Line points={[0, 0, -5.5, -1.9, -5.5, 1.9]} closed fill={color} stroke={color} strokeWidth={0.4} lineJoin="round" />
+    </Group>
+  );
+}
 
 // Dimension line split into two segments with a gap for the label so the line
 // never strikes through the number. `mid` is the label center, `gapFt` the
@@ -100,14 +111,14 @@ export function WallDimension({ wall, kind, offset, centroid, justify = 'center'
   return (
     <Group>
       {g.witness.map((seg, i) => (
-        <Line key={'w' + i} points={[...P(seg[0]), ...P(seg[1])]} stroke={color} strokeWidth={0.6} opacity={0.7} strokeScaleEnabled={false} listening={false} />
+        <Line key={'w' + i} points={[...P(seg[0]), ...P(seg[1])]} stroke={color} strokeWidth={0.5} opacity={0.6} strokeScaleEnabled={false} listening={false} />
       ))}
-      {/* dim line broken around the number (───┤ 13' 6" ├───); on tight runs the
+      {/* dim line broken around the number (───▶ 13' 6" ◀───); on tight runs the
           label fills the line so no center line is drawn — never strikes text */}
-      {segs.map((s, i) => <Line key={'dl' + i} points={[...P(s.a), ...P(s.b)]} stroke={color} strokeWidth={0.6} strokeScaleEnabled={false} listening={false} />)}
-      {g.slashes.map((seg, i) => (
-        <Line key={'s' + i} points={[...P(seg[0]), ...P(seg[1])]} stroke={color} strokeWidth={0.9} strokeScaleEnabled={false} listening={false} />
-      ))}
+      {segs.map((s, i) => <Line key={'dl' + i} points={[...P(s.a), ...P(s.b)]} stroke={color} strokeWidth={0.5} strokeScaleEnabled={false} listening={false} />)}
+      {/* arrowheads at each end, pointing outward at the wall edge */}
+      <DimArrow x={g.line[0].x * S} y={g.line[0].y * S} ang={Math.atan2(g.line[0].y - g.line[1].y, g.line[0].x - g.line[1].x) * 180 / Math.PI} color={color} inv={inv} />
+      <DimArrow x={g.line[1].x * S} y={g.line[1].y * S} ang={Math.atan2(g.line[1].y - g.line[0].y, g.line[1].x - g.line[0].x) * 180 / Math.PI} color={color} inv={inv} />
       {/* draggable hit area (pill removed) — drag perpendicular to set the offset */}
       <Group x={g.label.x * S} y={g.label.y * S} rotation={g.label.angle} scaleX={inv} scaleY={inv}
         onMouseDown={onPillDown} onTouchStart={onPillDown}
@@ -130,17 +141,24 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
   return (
     <Group>
       {g.witness.map((s, i) => (
-        <Line key={'w' + i} points={[...P(s[0]), ...P(s[1])]} stroke={color} strokeWidth={0.5} opacity={0.5} strokeScaleEnabled={false} listening={false} />
+        <Line key={'w' + i} points={[...P(s[0]), ...P(s[1])]} stroke={color} strokeWidth={0.45} opacity={0.5} strokeScaleEnabled={false} listening={false} />
       ))}
       {g.segments.map((seg, i) => {
         const lw = seg.label.text.length * 5.8 + 8;
         const mid = { x: (seg.line[0].x + seg.line[1].x) / 2, y: (seg.line[0].y + seg.line[1].y) / 2 };
         const segs = brokenLine(seg.line[0], seg.line[1], mid, ((lw / 2 + 5) * inv) / S);
-        return segs.map((s, j) => <Line key={'l' + i + '_' + j} points={[...P(s.a), ...P(s.b)]} stroke={color} strokeWidth={0.6} strokeScaleEnabled={false} listening={false} />);
+        return segs.map((s, j) => <Line key={'l' + i + '_' + j} points={[...P(s.a), ...P(s.b)]} stroke={color} strokeWidth={0.5} strokeScaleEnabled={false} listening={false} />);
       })}
-      {g.ticks.map((s, i) => (
-        <Line key={'t' + i} points={[...P(s[0]), ...P(s[1])]} stroke={color} strokeWidth={0.8} strokeScaleEnabled={false} listening={false} />
-      ))}
+      {/* inward arrowheads at each segment's ends (◀ 5'0" ▶) instead of slash ticks */}
+      {g.segments.map((seg, i) => {
+        const [p0, p1] = seg.line;
+        return (
+          <React.Fragment key={'a' + i}>
+            <DimArrow x={p0.x * S} y={p0.y * S} ang={Math.atan2(p1.y - p0.y, p1.x - p0.x) * 180 / Math.PI} color={color} inv={inv} />
+            <DimArrow x={p1.x * S} y={p1.y * S} ang={Math.atan2(p0.y - p1.y, p0.x - p1.x) * 180 / Math.PI} color={color} inv={inv} />
+          </React.Fragment>
+        );
+      })}
       {g.segments.map((seg, i) => {
         const w = seg.label.text.length * 5 + 6;
         return (
