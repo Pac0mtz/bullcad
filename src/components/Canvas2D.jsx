@@ -1216,15 +1216,17 @@ export default function Canvas2D() {
                 </Group>
                 {selRoom && (
                   <React.Fragment>
-                    {/* move the whole ROOM — sits clearly ABOVE the label (blue 4-way) */}
-                    <Group x={lx} y={ly + (hitTop - 20)} scaleX={1 / view.k} scaleY={1 / view.k}
+                    {/* move the whole ROOM — sits just ABOVE the label (blue 4-way).
+                        Offset is divided by view.k so the gap is a CONSTANT screen
+                        distance at any zoom (it doesn't drift away when zoomed in). */}
+                    <Group x={lx} y={ly + (hitTop - 13) / view.k} scaleX={1 / view.k} scaleY={1 / view.k}
                       onMouseDown={startRoomMove(rm)} onTouchStart={startRoomMove(rm)}
                       onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
                       <Circle radius={10} fill={BLUE} stroke="#fff" strokeWidth={1.5} hitStrokeWidth={coarse ? 18 : 8} />
                       {arrows.map((p, k) => <Line key={k} points={p} stroke="#fff" strokeWidth={1.4} lineCap="round" listening={false} />)}
                     </Group>
-                    {/* move just the LABEL — sits BELOW it (teal, text-lines icon) */}
-                    <Group x={lx} y={ly + (hitTop + hitH + 16)} scaleX={1 / view.k} scaleY={1 / view.k}
+                    {/* move just the LABEL — sits just BELOW it (teal, text-lines icon) */}
+                    <Group x={lx} y={ly + (hitTop + hitH + 11) / view.k} scaleX={1 / view.k} scaleY={1 / view.k}
                       onMouseDown={startRoomLabelDrag(rm)} onTouchStart={startRoomLabelDrag(rm)}
                       onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
                       <Circle radius={9} fill="#fff" stroke={TEAL} strokeWidth={2} hitStrokeWidth={coarse ? 18 : 8} />
