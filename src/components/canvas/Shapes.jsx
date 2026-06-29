@@ -138,6 +138,9 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
   const P = (p) => [p.x * S, p.y * S];
   const inv = dimScale(zoom);
   const setCur = (c) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = c; };
+  // responsive: only show a segment's number when the segment is wide enough on
+  // SCREEN to hold it — so tight runs don't overlap, and zooming in reveals them.
+  const fitsNum = (seg) => dist(seg.line[0], seg.line[1]) * S * zoom > seg.label.text.length * DIM_FS * 0.62 + 5;
   return (
     <Group>
       {g.witness.map((s, i) => (
@@ -146,7 +149,7 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
       {g.segments.map((seg, i) => {
         const lw = seg.label.text.length * 5.8 + 8;
         const mid = { x: (seg.line[0].x + seg.line[1].x) / 2, y: (seg.line[0].y + seg.line[1].y) / 2 };
-        const segs = brokenLine(seg.line[0], seg.line[1], mid, ((lw / 2 + 5) * inv) / S);
+        const segs = fitsNum(seg) ? brokenLine(seg.line[0], seg.line[1], mid, ((lw / 2 + 5) * inv) / S) : [{ a: seg.line[0], b: seg.line[1] }];
         return segs.map((s, j) => <Line key={'l' + i + '_' + j} points={[...P(s.a), ...P(s.b)]} stroke={color} strokeWidth={0.5} strokeScaleEnabled={false} listening={false} />);
       })}
       {/* inward arrowheads at each segment's ends (◀ 5'0" ▶) instead of slash ticks */}
@@ -160,6 +163,7 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
         );
       })}
       {g.segments.map((seg, i) => {
+        if (!fitsNum(seg)) return null; // too tight — number hidden until you zoom in
         const w = seg.label.text.length * 5 + 6;
         return (
           <Group key={'g' + i} x={seg.label.x * S} y={seg.label.y * S} rotation={seg.label.angle} scaleX={inv} scaleY={inv}

@@ -70,17 +70,28 @@ export function buildPlanSvg(model, opts = {}) {
   const ptFt = (pt) => pt / sc;
   const dimFs = ptFt(opts.dimLabelPt || 5.5); // dimension numbers (smaller so tight openings/doors don't crowd)
   const DIMW = 0.035;                  // dim-line stroke (feet)
-  // a dimension line split around its label (───┤ 13' 6" ├───) so it never
-  // strikes through the number
+  // small filled arrowhead at `tip`, pointing in unit dir (ux,uy) — matches the
+  // on-screen dimensions (replaces the old 45° slash ticks)
+  const AL = ptFt(4.5), AW = ptFt(1.6); // arrow length / half-width (constant points)
+  const dimArrow = (tip, ux, uy) => {
+    const nx = -uy, ny = ux;
+    return `<polygon points="${r2(tip.x)},${r2(tip.y)} ${r2(tip.x - ux * AL + nx * AW)},${r2(tip.y - uy * AL + ny * AW)} ${r2(tip.x - ux * AL - nx * AW)},${r2(tip.y - uy * AL - ny * AW)}" fill="${NAVY}"/>`;
+  };
+  // a dimension line with inward arrowheads, split around its label (▶ 13' 6" ◀).
+  // Returns { svg, showNum } so the caller can hide the number on a too-tight run.
   const dimLineSVG = (p0, p1, text, fs) => {
     const dx = p1.x - p0.x, dy = p1.y - p0.y, len = Math.hypot(dx, dy) || 1;
-    const half = (text.length * fs * 0.66 + fs * 0.9) / 2; // label half-width (feet, Poppins)
-    // text fills the whole line → draw NO center line (the end ticks + number
-    // convey it); otherwise two stubs with a gap so the line never crosses text
-    if (len / 2 - half <= 0.05) return '';
     const ux = dx / len, uy = dy / len, mx = (p0.x + p1.x) / 2, my = (p0.y + p1.y) / 2;
-    return `<line x1="${r2(p0.x)}" y1="${r2(p0.y)}" x2="${r2(mx - ux * half)}" y2="${r2(my - uy * half)}" stroke="${NAVY}" stroke-width="${DIMW}"/>`
-      + `<line x1="${r2(mx + ux * half)}" y1="${r2(my + uy * half)}" x2="${r2(p1.x)}" y2="${r2(p1.y)}" stroke="${NAVY}" stroke-width="${DIMW}"/>`;
+    const half = (text.length * fs * 0.66 + fs * 0.9) / 2; // label half-width (feet)
+    const showNum = len / 2 - half > 0.05;
+    let svg = dimArrow(p0, ux, uy) + dimArrow(p1, -ux, -uy); // arrows point inward
+    if (showNum) {
+      svg += `<line x1="${r2(p0.x)}" y1="${r2(p0.y)}" x2="${r2(mx - ux * half)}" y2="${r2(my - uy * half)}" stroke="${NAVY}" stroke-width="${DIMW}"/>`
+        + `<line x1="${r2(mx + ux * half)}" y1="${r2(my + uy * half)}" x2="${r2(p1.x)}" y2="${r2(p1.y)}" stroke="${NAVY}" stroke-width="${DIMW}"/>`;
+    } else {
+      svg += `<line x1="${r2(p0.x)}" y1="${r2(p0.y)}" x2="${r2(p1.x)}" y2="${r2(p1.y)}" stroke="${NAVY}" stroke-width="${DIMW}"/>`;
+    }
+    return { svg, showNum };
   };
 
   fences.forEach((f) => {
@@ -205,9 +216,9 @@ export function buildPlanSvg(model, opts = {}) {
       const dg = wallDimGeometry(w, k, (w.dimOff ?? baseOff) + extra, centroid, wj, unit);
       if (!dg) return;
       dg.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.035"/>`));
-      el.push(dimLineSVG(dg.line[0], dg.line[1], dg.label.text, dimFs));
-      dg.slashes.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.06"/>`));
-      el.push(dimPill(dg.label.x, dg.label.y, dg.label.angle, dg.label.text, dimFs));
+      const dl = dimLineSVG(dg.line[0], dg.line[1], dg.label.text, dimFs);
+      el.push(dl.svg);
+      if (dl.showNum) el.push(dimPill(dg.label.x, dg.label.y, dg.label.angle, dg.label.text, dimFs));
     });
   });
 
@@ -217,9 +228,7 @@ export function buildPlanSvg(model, opts = {}) {
     const og = wallOpeningDimGeometry(w, wops, w.openDimOff ?? baseOff, centroid, wj, unit);
     if (!og) return;
     og.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.03"/>`));
-    og.segments.forEach((seg) => el.push(dimLineSVG(seg.line[0], seg.line[1], seg.label.text, dimFs)));
-    og.ticks.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.05"/>`));
-    og.segments.forEach((seg) => el.push(dimPill(seg.label.x, seg.label.y, seg.label.angle, seg.label.text, dimFs)));
+    og.segments.forEach((seg) => { const dl = dimLineSVG(seg.line[0], seg.line[1], seg.label.text, dimFs); el.push(dl.svg); if (dl.showNum) el.push(dimPill(seg.label.x, seg.label.y, seg.label.angle, seg.label.text, dimFs)); });
   });
 
   // fence dimensions — overall length + gate splits (mirrors walls)
@@ -231,16 +240,14 @@ export function buildPlanSvg(model, opts = {}) {
     const dg = wallDimGeometry(fw, 'centerline', fbase + extra, fenceCentroid, fj, unit);
     if (dg) {
       dg.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.035"/>`));
-      el.push(dimLineSVG(dg.line[0], dg.line[1], dg.label.text, dimFs));
-      dg.slashes.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.06"/>`));
-      el.push(dimPill(dg.label.x, dg.label.y, dg.label.angle, dg.label.text, dimFs));
+      const dl = dimLineSVG(dg.line[0], dg.line[1], dg.label.text, dimFs);
+      el.push(dl.svg);
+      if (dl.showNum) el.push(dimPill(dg.label.x, dg.label.y, dg.label.angle, dg.label.text, dimFs));
     }
     const og = wallOpeningDimGeometry(fw, fgates, f.openDimOff ?? fbase, fenceCentroid, fj, unit);
     if (og) {
       og.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.03"/>`));
-      og.segments.forEach((seg) => el.push(dimLineSVG(seg.line[0], seg.line[1], seg.label.text, dimFs)));
-      og.ticks.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${NAVY}" stroke-width="0.05"/>`));
-      og.segments.forEach((seg) => el.push(dimPill(seg.label.x, seg.label.y, seg.label.angle, seg.label.text, dimFs)));
+      og.segments.forEach((seg) => { const dl = dimLineSVG(seg.line[0], seg.line[1], seg.label.text, dimFs); el.push(dl.svg); if (dl.showNum) el.push(dimPill(seg.label.x, seg.label.y, seg.label.angle, seg.label.text, dimFs)); });
     }
   });
 
