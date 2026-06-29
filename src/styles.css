@@ -534,6 +534,15 @@ button:focus-visible,
   box-shadow: var(--shadow-lg);
 }
 .mdraw-modal .md-title { font-size: 13.5px; font-weight: 600; text-align: center; margin-bottom: 12px; opacity: 0.95; }
+/* wall-thickness stepper now lives inside the Begin-Wall sheet (one panel, not two) */
+.mdraw-modal .md-thick { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px; }
+.mdraw-modal .md-thick-label { font-size: 13px; font-weight: 600; opacity: 0.8; }
+.mdraw-modal .md-thick-val { min-width: 38px; text-align: center; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mdraw-modal .md-thick button {
+  width: 38px; height: 38px; border: none; border-radius: 10px;
+  background: rgba(255,255,255,0.14); color: #fff; font-size: 20px; line-height: 1; cursor: pointer;
+}
+.mdraw-modal .md-thick button:active { background: rgba(255,255,255,0.26); }
 .mdraw-modal .md-row { display: flex; gap: 10px; }
 .mdraw-modal .md-row button { flex: 1; height: 46px; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; }
 .mdraw-modal .md-primary { background: var(--teal); color: #03201c; }
@@ -748,6 +757,25 @@ kbd {
   .btn { padding: 0 11px; min-width: 40px; justify-content: center; gap: 0; }
 }
 
+/* phone "more" menu: holds AI + file actions so the header never overflows */
+.tbar-more-wrap { position: relative; display: none; }
+.tbar-more.active { background: rgba(255,255,255,0.22); }
+.tbar-menu-backdrop { position: fixed; inset: 0; z-index: 40; }
+.tbar-menu {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 41;
+  min-width: 210px; display: flex; flex-direction: column; gap: 2px;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--slate-200); border-radius: 12px; padding: 6px;
+  box-shadow: var(--shadow-lg);
+}
+.tbar-menu button {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  border: none; background: transparent; color: var(--text);
+  padding: 11px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: left;
+}
+.tbar-menu button:hover { background: var(--slate-bg); }
+.tbar-menu button svg { width: 18px; height: 18px; flex: none; }
+
 /* Very narrow: collapse the brand to just the logo to save the toolbar room. */
 @media (max-width: 560px) {
   .brand span:not(.logo) { display: none; }
@@ -755,6 +783,9 @@ kbd {
   .toolbar { gap: 6px; padding: 0 8px; }
   /* secondary file actions are tucked away — keep only PDF + Export on phones */
   .hide-phone { display: none !important; }
+  /* AI + file actions move into the "more" menu so nothing overflows */
+  .tbar-collapse { display: none !important; }
+  .tbar-more-wrap { display: block; }
   .mode-toggle button { padding: 6px 13px; }
   /* export modal becomes a bottom sheet */
   .modal-overlay { align-items: flex-end; padding: 0; }

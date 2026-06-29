@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useStore } from '../store.js';
 import {
   IconUndo, IconRedo, IconExport, IconImport, IconNew,
-  IconSun, IconMoon, IconPdf, IconSparkle,
+  IconSun, IconMoon, IconPdf, IconSparkle, IconMore,
 } from './Icons.jsx';
 // All tools — including Select/Pan — now live in the left "Tools" sidebar; the
 // header keeps only history (undo/redo), view, and file actions.
@@ -31,6 +31,9 @@ export default function Toolbar({ fileRef }) {
   const setExportOpen = useStore((s) => s.setExportOpen);
   const aiOpen = useStore((s) => s.aiOpen);
   const setAiOpen = useStore((s) => s.setAiOpen);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const exportJson = () => download('plan.json', JSON.stringify(exportPlan(), null, 2));
+  const clearPlan = () => { if (confirm('Clear the plan and start over?')) newPlan(); };
 
   return (
     <header className="toolbar">
@@ -70,26 +73,45 @@ export default function Toolbar({ fileRef }) {
         </button>
       </div>
 
-      <button className={'btn ghost ai-toggle' + (aiOpen ? ' active' : '')} onClick={() => setAiOpen(!aiOpen)} title="AI assistant — build & edit by chat">
+      <button className={'btn ghost ai-toggle tbar-collapse' + (aiOpen ? ' active' : '')} onClick={() => setAiOpen(!aiOpen)} title="AI assistant — build & edit by chat">
         <IconSparkle /> <span className="btn-label">AI</span>
       </button>
 
-      <div className="tbar-sep" />
+      <div className="tbar-sep tbar-collapse" />
 
-      {/* File actions: secondary (icon) + primary Export */}
-      <div className="tbar-cluster">
-        <button className="btn ghost icon-only hide-phone" onClick={() => { if (confirm('Clear the plan and start over?')) newPlan(); }} title="New / Clear plan" aria-label="New plan">
+      {/* File actions: secondary (icon) + primary Export — collapse into a menu on phones */}
+      <div className="tbar-cluster tbar-collapse">
+        <button className="btn ghost icon-only" onClick={clearPlan} title="New / Clear plan" aria-label="New plan">
           <IconNew />
         </button>
-        <button className="btn ghost icon-only hide-phone" onClick={() => fileRef.current?.click()} title="Import JSON plan" aria-label="Import plan">
+        <button className="btn ghost icon-only" onClick={() => fileRef.current?.click()} title="Import JSON plan" aria-label="Import plan">
           <IconImport />
         </button>
         <button className="btn ghost" onClick={() => setExportOpen(true)} title="Export a print-ready PDF (with legend)">
           <IconPdf /> <span className="btn-label">PDF</span>
         </button>
-        <button className="btn" onClick={() => download('plan.json', JSON.stringify(exportPlan(), null, 2))} title="Export plan as JSON">
+        <button className="btn" onClick={exportJson} title="Export plan as JSON">
           <IconExport /> <span className="btn-label">Export</span>
         </button>
+      </div>
+
+      {/* phone: a single "more" button holding AI + the file actions */}
+      <div className="tbar-more-wrap">
+        <button className={'btn ghost icon-only tbar-more' + (menuOpen ? ' active' : '')} onClick={() => setMenuOpen((o) => !o)} aria-label="More actions" title="More">
+          <IconMore />
+        </button>
+        {menuOpen && (
+          <>
+            <div className="tbar-menu-backdrop" onClick={() => setMenuOpen(false)} />
+            <div className="tbar-menu" role="menu">
+              <button onClick={() => { setAiOpen(!aiOpen); setMenuOpen(false); }}><IconSparkle /> AI assistant</button>
+              <button onClick={() => { clearPlan(); setMenuOpen(false); }}><IconNew /> New / clear plan</button>
+              <button onClick={() => { fileRef.current?.click(); setMenuOpen(false); }}><IconImport /> Import JSON</button>
+              <button onClick={() => { setExportOpen(true); setMenuOpen(false); }}><IconPdf /> Export PDF</button>
+              <button onClick={() => { exportJson(); setMenuOpen(false); }}><IconExport /> Export JSON</button>
+            </div>
+          </>
+        )}
       </div>
     </header>
   );

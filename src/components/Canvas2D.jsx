@@ -1150,10 +1150,10 @@ export default function Canvas2D() {
                 onDragMove={(e) => { e.cancelBubble = true; const p = drawPt({ x: e.target.x() / scale, y: e.target.y() / scale }); setMDraw((m) => m && { ...m, pointer: { x: p.x, y: p.y } }); }}>
                 <Group scaleX={1 / view.k} scaleY={1 / view.k}>
                   <Circle radius={26} stroke={BLUE} strokeWidth={2} opacity={0.5} />
-                  {[[0, -26, 0, -12], [0, 26, 0, 12], [-26, 0, -12, 0], [26, 0, 12, 0]].map((p, i) => (
-                    <Line key={i} points={p} stroke={BLUE} strokeWidth={2.5} lineCap="round" />
+                  {[[0, -26, 0, -14], [0, 26, 0, 14], [-26, 0, -14, 0], [26, 0, 14, 0]].map((p, i) => (
+                    <Line key={i} points={p} stroke={BLUE} strokeWidth={2} lineCap="round" />
                   ))}
-                  <Circle radius={9} fill={BLUE} stroke="#fff" strokeWidth={2.5} />
+                  <Circle radius={4.5} fill={BLUE} stroke="#fff" strokeWidth={1.5} />
                 </Group>
               </Group>
             </>
@@ -1466,8 +1466,10 @@ export default function Canvas2D() {
         );
       })()}
 
-      {/* wall/fence drawing toolbar — live thickness + Exit Drawing (magicplan-style) */}
-      {(tool === 'wall' || tool === 'fence') && (
+      {/* wall/fence drawing toolbar — live thickness + Exit Drawing (magicplan-style).
+          Hidden during the mobile guided draw (mDraw) — its thickness + actions live
+          in the bottom Begin-Wall sheet instead, so there's only one panel. */}
+      {(tool === 'wall' || tool === 'fence') && !mDraw && (
         <div className="draw-toolbar">
           {!mDraw && <span className="dt-hint">{draft ? `Drawing ${tool} — click each corner` : `Click to start the ${tool}`}</span>}
           {tool === 'wall' && (() => {
@@ -1500,6 +1502,18 @@ export default function Canvas2D() {
           {mDraw.phase === 'idle' ? (
             <>
               <div className="md-title">Drag the target to where the {tool} starts</div>
+              {tool === 'wall' && (() => {
+                const inch = store.wallThickness * 12;
+                const step = (d) => store.setDefault('wallThickness', Math.max(1, Math.min(24, inch + d)) / 12);
+                return (
+                  <div className="md-thick">
+                    <span className="md-thick-label">Wall thickness</span>
+                    <button onClick={() => step(-0.5)} aria-label="Thinner">−</button>
+                    <span className="md-thick-val">{Number.isInteger(inch) ? inch : inch.toFixed(1)}″</span>
+                    <button onClick={() => step(0.5)} aria-label="Thicker">+</button>
+                  </div>
+                );
+              })()}
               <div className="md-row">
                 <button className="md-primary" onClick={mBegin}>Begin {tool === 'wall' ? 'Wall' : 'Fence'}</button>
                 <button className="md-ghost" onMouseDown={(e) => { e.preventDefault(); finishRun(true); }}>Cancel</button>

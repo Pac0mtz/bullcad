@@ -57,7 +57,7 @@ export function buildPlanSvg(model, opts = {}) {
   // feet value that renders as 10pt. Fallback when the fit box isn't supplied.
   const sc = (opts.fitW > 0 && opts.fitH > 0) ? Math.min(opts.fitW / wFt, opts.fitH / hFt) : 12;
   const ptFt = (pt) => pt / sc;
-  const dimFs = ptFt(opts.dimLabelPt || 7); // dimension numbers (default 7 pt — matches the app's relative size)
+  const dimFs = ptFt(opts.dimLabelPt || 5.5); // dimension numbers (smaller so tight openings/doors don't crowd)
   const DIMW = 0.035;                  // dim-line stroke (feet)
   // a dimension line split around its label (───┤ 13' 6" ├───) so it never
   // strikes through the number
