@@ -203,7 +203,6 @@ export function buildPlanSvg(model, opts = {}) {
   const kindsFor = (m) => (m === 'off' ? [] : m === 'both' ? ['interior', 'exterior'] : [m]);
   const baseOff = opts.dimOffset ?? 1;
   const unit = opts.dimUnit; // undefined = feet-inches; 'in' = inches only
-  const hasOpenings = openings.length > 0;
   const ROW_GAP = 1.6;
   walls.forEach((w) => {
     // per-wall kinds, exactly like the on-screen plan: honor a per-wall dimMode
@@ -211,8 +210,11 @@ export function buildPlanSvg(model, opts = {}) {
     // than an exterior face that overshoots into the walls they tie into
     const kinds = [...new Set(kindsFor(w.dimMode || opts.dimMode || 'exterior')
       .map((k) => (k === 'exterior' && !w.exterior ? 'interior' : k)))];
+    // only push the overall row out past an opening string when THIS wall has its
+    // own openings — a plain wall keeps the single dim at the normal 1' offset
+    const wOpen = openings.some((o) => o.wallId === w.id);
     kinds.forEach((k) => {
-      const extra = hasOpenings && k !== 'interior' ? ROW_GAP : 0;
+      const extra = wOpen && k !== 'interior' ? ROW_GAP : 0;
       const dg = wallDimGeometry(w, k, (w.dimOff ?? baseOff) + extra, centroid, wj, unit);
       if (!dg) return;
       dg.witness.forEach((s) => el.push(`<line x1="${r2(s[0].x)}" y1="${r2(s[0].y)}" x2="${r2(s[1].x)}" y2="${r2(s[1].y)}" stroke="${DIM}" stroke-width="${WITW}"/>`));

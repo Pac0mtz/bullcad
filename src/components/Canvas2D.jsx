@@ -912,7 +912,6 @@ export default function Canvas2D() {
     return m;
   }, [gates]);
   const ROW_GAP = 1.6; // ft — push the overall row out past the opening string
-  const hasOpenings = openings.length > 0;
   // Justified, miter-joined endpoints per wall/fence so corners stay clean when
   // the drawn line is shifted to a face (interior/exterior). See justifiedSegments.
   const wallSegs = useMemo(
@@ -1090,9 +1089,11 @@ export default function Canvas2D() {
               // location: fall back to the interior (true span) for non-exterior walls.
               const kinds = [...new Set(kindsFor(w.dimMode || dimMode)
                 .map((k) => (k === 'exterior' && !w.exterior ? 'interior' : k)))];
+              // only push the outer row out past an opening string when THIS wall
+              // has openings; a plain wall keeps its single dim at the 1' offset
+              const wOpen = openings.some((o) => o.wallId === w.id);
               return kinds.map((k) => { // per-wall mode override
-                // push the outer (exterior/centerline) row out so it clears the opening string
-                const extra = hasOpenings && k !== 'interior' ? ROW_GAP : 0;
+                const extra = wOpen && k !== 'interior' ? ROW_GAP : 0;
                 return (
                   <WallDimension key={'dw' + w.id + k} wall={w} kind={k} offset={base + extra} justify={w.justify || wallJustify}
                     centroid={wallCentroid} scale={scale} palette={t} color={t.wallDim} onPillDown={startOffsetDrag(w, 'wall', w.id, extra)} zoom={view.k} />
