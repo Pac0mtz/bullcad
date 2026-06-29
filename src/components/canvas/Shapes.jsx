@@ -42,14 +42,13 @@ function swingGeom(w, inward, hinge = 'left', swing = 'in') {
   return { d, hx, rotation };
 }
 
-// Dimension text scale vs zoom. Zoomed out (≤1×) it stays a constant screen size
-// so it's readable; from 1×→4× it grows WITH the plan (so zooming in no longer
-// makes the numbers look tiny next to the enlarged walls); past 4× it's capped so
-// it never bloats. Returns the group scale (applied as scaleX/scaleY).
-// Dimensions are a CONSTANT small screen size at any zoom (like magicplan /
-// Floorplanner / CAD) — the line lengths still scale with the plan, but the text
-// and end markers never bloat as you zoom in.
-const dimScale = (z) => 1 / (z || 1);
+// Dimension numbers are tuned to look right at ~127% zoom and then scale WITH the
+// plan, so zooming in keeps them proportional to the walls (they no longer look
+// tiny next to the enlarged drawing) and zooming out keeps them tucked in. The
+// group scale is constant (independent of zoom), so text + end markers ride the
+// plan's own zoom — never counter-scaled to a fixed screen size, never hidden.
+const DIM_REF = 1.27;            // the "127%" the numbers are sized for
+const dimScale = () => 1 / DIM_REF;
 const DIM_FS = 7; // one small size for every dimension number
 
 // Small filled arrowhead, constant screen size, tip at (x,y) pointing along `ang`
@@ -138,9 +137,6 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
   const P = (p) => [p.x * S, p.y * S];
   const inv = dimScale(zoom);
   const setCur = (c) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = c; };
-  // responsive: only show a segment's number when the segment is wide enough on
-  // SCREEN to hold it — so tight runs don't overlap, and zooming in reveals them.
-  const fitsNum = (seg) => dist(seg.line[0], seg.line[1]) * S * zoom > seg.label.text.length * DIM_FS * 0.62 + 5;
   return (
     <Group>
       {g.witness.map((s, i) => (
@@ -149,7 +145,7 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
       {g.segments.map((seg, i) => {
         const lw = seg.label.text.length * 5.8 + 8;
         const mid = { x: (seg.line[0].x + seg.line[1].x) / 2, y: (seg.line[0].y + seg.line[1].y) / 2 };
-        const segs = fitsNum(seg) ? brokenLine(seg.line[0], seg.line[1], mid, ((lw / 2 + 5) * inv) / S) : [{ a: seg.line[0], b: seg.line[1] }];
+        const segs = brokenLine(seg.line[0], seg.line[1], mid, ((lw / 2 + 5) * inv) / S);
         return segs.map((s, j) => <Line key={'l' + i + '_' + j} points={[...P(s.a), ...P(s.b)]} stroke={color} strokeWidth={0.5} strokeScaleEnabled={false} listening={false} />);
       })}
       {/* inward arrowheads at each segment's ends (◀ 5'0" ▶) instead of slash ticks */}
@@ -163,7 +159,6 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
         );
       })}
       {g.segments.map((seg, i) => {
-        if (!fitsNum(seg)) return null; // too tight — number hidden until you zoom in
         const w = seg.label.text.length * 5 + 6;
         return (
           <Group key={'g' + i} x={seg.label.x * S} y={seg.label.y * S} rotation={seg.label.angle} scaleX={inv} scaleY={inv}
