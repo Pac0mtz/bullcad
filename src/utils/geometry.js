@@ -398,7 +398,13 @@ export function wallPolygons(segs, justify, centroid, thicknessOf) {
       const m = members[i], ccw = members[(i + 1) % N], cw = members[(i - 1 + N) % N];
       const lf = faceLine(m, 1), rf = faceLine(m, -1);
       let left = lf.o, right = rf.o; // free end → square
-      if (N > 1) {
+      // A wall that passes STRAIGHT THROUGH this node (it has a collinear-opposite
+      // member — the through-wall at a T/X junction) keeps a square end so the
+      // branch butts into a clean rectangle. Mitering it against the branch pulls
+      // one corner to ±t/2 while the other stays on the centerline → a triangular
+      // notch in the poché (the "triangle in the wall"). Only true corners miter.
+      const straightThrough = members.some((o) => o !== m && Math.abs(Math.abs(o.ang - m.ang) - Math.PI) < 0.06);
+      if (N > 1 && !straightThrough) {
         const a = faceLine(ccw, -1), b = faceLine(cw, 1);
         left = lineIntersect(lf.o, lf.d, a.o, a.d) || lf.o;
         right = lineIntersect(rf.o, rf.d, b.o, b.d) || rf.o;
