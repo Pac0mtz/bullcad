@@ -46,7 +46,10 @@ function swingGeom(w, inward, hinge = 'left', swing = 'in') {
 // so it's readable; from 1×→4× it grows WITH the plan (so zooming in no longer
 // makes the numbers look tiny next to the enlarged walls); past 4× it's capped so
 // it never bloats. Returns the group scale (applied as scaleX/scaleY).
-const dimScale = (z) => { z = z || 1; return z <= 1 ? 1 / z : z <= 2.2 ? 1 : 2.2 / z; };
+const dimScale = (z) => { z = z || 1; return z <= 1 ? 1 / z : z <= 2 ? 1 : 2 / z; };
+// One small size for EVERY dimension number (whole-wall, opening splits, measure)
+// so the plan reads consistently and stays compact when zoomed in.
+const DIM_FS = 7.5;
 
 // Dimension line split into two segments with a gap for the label so the line
 // never strikes through the number. `mid` is the label center, `gapFt` the
@@ -77,7 +80,7 @@ export function DimLabel({ a, b, scale, color = NAVY, off = 0.9, palette = DEFAU
   if (angle > 90 || angle < -90) angle += 180; // keep text upright
   return (
     <Group x={cx} y={cy} rotation={angle} scaleX={inv} scaleY={inv} listening={false}>
-      <Text x={-w / 2} y={-4.5} width={w} align="center" text={txt} fontSize={9.5} fontFamily="Poppins"
+      <Text x={-w / 2} y={-4} width={w} align="center" text={txt} fontSize={DIM_FS} fontFamily="Poppins"
         fontStyle="500" fill={color} stroke={palette.opMask} strokeWidth={3} fillAfterStrokeEnabled lineJoin="round" />
     </Group>
   );
@@ -110,7 +113,7 @@ export function WallDimension({ wall, kind, offset, centroid, justify = 'center'
         onMouseDown={onPillDown} onTouchStart={onPillDown}
         onMouseEnter={onPillDown && setCur('move')} onMouseLeave={onPillDown && setCur('')}>
         <Rect x={-w / 2} y={-6.5} width={w} height={13} fill="rgba(0,0,0,0.001)" />
-        <Text x={-w / 2} y={-4.5} width={w} align="center" text={g.label.text} fontSize={9.5} fontFamily="Poppins" fontStyle="500" fill={color} listening={false} />
+        <Text x={-w / 2} y={-4} width={w} align="center" text={g.label.text} fontSize={DIM_FS} fontFamily="Poppins" fontStyle="500" fill={color} listening={false} />
       </Group>
     </Group>
   );
@@ -145,7 +148,7 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
             onMouseDown={onPillDown} onTouchStart={onPillDown}
             onMouseEnter={onPillDown && setCur('move')} onMouseLeave={onPillDown && setCur('')}>
             <Rect x={-w / 2} y={-6} width={w} height={12} fill="rgba(0,0,0,0.001)" />
-            <Text x={-w / 2} y={-4} width={w} align="center" text={seg.label.text} fontSize={7} fontFamily="Poppins" fontStyle="500" fill={color} listening={false} />
+            <Text x={-w / 2} y={-4} width={w} align="center" text={seg.label.text} fontSize={DIM_FS} fontFamily="Poppins" fontStyle="500" fill={color} listening={false} />
           </Group>
         );
       })}
