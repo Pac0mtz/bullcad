@@ -620,8 +620,10 @@ button:focus-visible,
   box-shadow: var(--shadow-lg); white-space: nowrap;
   pointer-events: auto;
 }
-/* column variant: pill runs vertically so it follows a vertical wall/opening */
-.wall-quick.wq-col { flex-direction: column; }
+/* column variant: pill runs vertically so it follows a vertical wall/opening —
+   one narrow column with the stepper stacked + (top) / value / − (bottom) */
+.wall-quick.wq-col { flex-direction: column; gap: 6px; }
+.wall-quick.wq-col .wq-thick { flex-direction: column-reverse; gap: 4px; }
 .wall-quick .wq-thick { display: flex; align-items: center; gap: 6px; }
 .wall-quick .wq-val {
   min-width: 30px; text-align: center; font-size: 12.5px; font-weight: 700;
