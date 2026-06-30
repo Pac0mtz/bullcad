@@ -62,6 +62,7 @@ export default function Canvas2D() {
   const [liveRegion, setLiveRegion] = useState(null);    // freehand stroke points
   const regionLiveRef = useRef([]);
   const regionSuppress = useRef(false); // skip the onClick right after a freehand drag
+  const [hoverCorner, setHoverCorner] = useState(null); // key of the hovered corner grip
   const drag = useRef(null); // active handle drag
   const runPath = useRef([]); // points clicked in the current wall run (for the room-area label)
   const marq = useRef(null);  // active marquee drag
@@ -930,18 +931,18 @@ export default function Canvas2D() {
   // junctions don't produce overlapping doubles. Diameter = wall thickness.
   const nodeKey = (p) => `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
   const cornerDots = useMemo(() => {
-    const m = new Map(); // raw-node key -> { sx, sy, n, thick }
-    const add = (raw, just, th) => {
+    const m = new Map(); // raw-node key -> { sx, sy, n, thick, ref }
+    const add = (raw, just, th, ref) => {
       const k = nodeKey(raw);
       const cur = m.get(k);
       if (cur) { cur.sx += just.x; cur.sy += just.y; cur.n++; cur.thick = Math.max(cur.thick, th); }
-      else m.set(k, { key: k, sx: just.x, sy: just.y, n: 1, thick: th });
+      else m.set(k, { key: k, sx: just.x, sy: just.y, n: 1, thick: th, ref }); // ref = one element to drag the corner by
     };
     // at a T-junction the band endpoint is stretched into the through-wall, so
     // grip on the raw connection point instead (keeps the circle centered there)
-    walls.forEach((w) => { const s = wallSegs.get(w.id); add(w.a, s?.aT ? w.a : (s?.a || w.a), w.thickness || 0.5); add(w.b, s?.bT ? w.b : (s?.b || w.b), w.thickness || 0.5); });
-    fences.forEach((f) => { const s = fenceSegs.get(f.id); add(f.a, s?.aT ? f.a : (s?.a || f.a), FENCE_THICK); add(f.b, s?.bT ? f.b : (s?.b || f.b), FENCE_THICK); });
-    return [...m.values()].map((c) => ({ key: c.key, x: c.sx / c.n, y: c.sy / c.n, thick: c.thick }));
+    walls.forEach((w) => { const s = wallSegs.get(w.id); add(w.a, s?.aT ? w.a : (s?.a || w.a), w.thickness || 0.5, { type: 'wall', id: w.id, end: 'a' }); add(w.b, s?.bT ? w.b : (s?.b || w.b), w.thickness || 0.5, { type: 'wall', id: w.id, end: 'b' }); });
+    fences.forEach((f) => { const s = fenceSegs.get(f.id); add(f.a, s?.aT ? f.a : (s?.a || f.a), FENCE_THICK, { type: 'fence', id: f.id, end: 'a' }); add(f.b, s?.bT ? f.b : (s?.b || f.b), FENCE_THICK, { type: 'fence', id: f.id, end: 'b' }); });
+    return [...m.values()].map((c) => ({ key: c.key, x: c.sx / c.n, y: c.sy / c.n, thick: c.thick, ref: c.ref }));
   }, [walls, fences, wallSegs, fenceSegs]);
 
   // corners of the currently-selected wall/fence — their gray grip is hidden so
@@ -1133,13 +1134,29 @@ export default function Canvas2D() {
               (the selected element's corners get blue handles on top, below) */}
           {/* each grip's DIAMETER matches its corner's wall thickness, so it reads as
               a round post filling the wall at the corner (min size keeps it tappable) */}
-          <Group listening={false}>
+          <Group>
             {cornerDots.map((p, i) => {
               if (selectedNodeKeys.has(p.key)) return null; // blue handle covers this corner
-              const r = Math.max(coarse ? 4 : 3, p.thick / 2 * scale * view.k); // = wall thickness on screen
+              const hovered = hoverCorner === p.key;
+              // bigger base on touch (coarse) so it's tappable; grows on hover
+              const baseR = Math.max(coarse ? 6 : 3, p.thick / 2 * scale * view.k); // = wall thickness on screen
+              const r = hovered ? baseR * 1.4 : baseR;
+              const startCorner = (e) => {
+                e.cancelBubble = true;
+                if (tool !== 'select' || !p.ref) return;
+                const list = p.ref.type === 'wall' ? walls : fences;
+                const el = list.find((x) => x.id === p.ref.id);
+                store.select({ type: p.ref.type, id: p.ref.id });
+                startHandle({ kind: p.ref.type === 'wall' ? 'wallEnd' : 'fenceEnd', id: p.ref.id, end: p.ref.end, origin: el ? { ...el[p.ref.end] } : undefined })(e);
+              };
+              const setCur = (c) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = c; };
               return (
-                <Group key={'cd' + i} x={p.x * scale} y={p.y * scale} scaleX={1 / view.k} scaleY={1 / view.k}>
-                  <Circle radius={r} fill="#94a3b8" stroke="#fff" strokeWidth={Math.max(1, r * 0.1)} />
+                <Group key={'cd' + i} x={p.x * scale} y={p.y * scale} scaleX={1 / view.k} scaleY={1 / view.k}
+                  onMouseEnter={(e) => { setHoverCorner(p.key); setCur('grab')(e); }}
+                  onMouseLeave={(e) => { setHoverCorner((h) => (h === p.key ? null : h)); setCur('')(e); }}
+                  onMouseDown={startCorner} onTouchStart={startCorner}>
+                  <Circle radius={r} fill={hovered ? BLUE : '#94a3b8'} stroke="#fff" strokeWidth={Math.max(1, r * 0.12)}
+                    hitStrokeWidth={Math.max(coarse ? 18 : 9, r)} />
                 </Group>
               );
             })}

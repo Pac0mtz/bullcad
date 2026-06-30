@@ -51,16 +51,6 @@ const DIM_REF = 1.27;            // the "127%" the numbers are sized for
 const dimScale = () => 1 / DIM_REF;
 const DIM_FS = 7; // one small size for every dimension number
 
-// Small filled arrowhead, constant screen size, tip at (x,y) pointing along `ang`
-// (degrees). Used at dimension-line ends to point at the wall edge.
-function DimArrow({ x, y, ang, color, inv }) {
-  return (
-    <Group x={x} y={y} rotation={ang} scaleX={inv} scaleY={inv} listening={false}>
-      <Line points={[0, 0, -5.5, -1.9, -5.5, 1.9]} closed fill={color} stroke={color} strokeWidth={0.4} lineJoin="round" />
-    </Group>
-  );
-}
-
 // Dimension line split into two segments with a gap for the label so the line
 // never strikes through the number. `mid` is the label center, `gapFt` the
 // half-gap (feet). When the label fills the whole line (tight openings/windows)
@@ -115,9 +105,8 @@ export function WallDimension({ wall, kind, offset, centroid, justify = 'center'
       {/* dim line broken around the number (───▶ 13' 6" ◀───); on tight runs the
           label fills the line so no center line is drawn — never strikes text */}
       {segs.map((s, i) => <Line key={'dl' + i} points={[...P(s.a), ...P(s.b)]} stroke={color} strokeWidth={0.5} strokeScaleEnabled={false} listening={false} />)}
-      {/* arrowheads at each end, pointing outward at the wall edge */}
-      <DimArrow x={g.line[0].x * S} y={g.line[0].y * S} ang={Math.atan2(g.line[0].y - g.line[1].y, g.line[0].x - g.line[1].x) * 180 / Math.PI} color={color} inv={inv} />
-      <DimArrow x={g.line[1].x * S} y={g.line[1].y * S} ang={Math.atan2(g.line[1].y - g.line[0].y, g.line[1].x - g.line[0].x) * 180 / Math.PI} color={color} inv={inv} />
+      {/* 45° slash ticks at each end (architectural style) */}
+      {g.slashes.map((sl, i) => <Line key={'sl' + i} points={[...P(sl[0]), ...P(sl[1])]} stroke={color} strokeWidth={0.5} strokeScaleEnabled={false} listening={false} />)}
       {/* draggable hit area (pill removed) — drag perpendicular to set the offset */}
       <Group x={g.label.x * S} y={g.label.y * S} rotation={g.label.angle} scaleX={inv} scaleY={inv}
         onMouseDown={onPillDown} onTouchStart={onPillDown}
@@ -148,16 +137,8 @@ export function WallOpeningDims({ wall, openings, perpOffset, centroid, justify 
         const segs = brokenLine(seg.line[0], seg.line[1], mid, ((lw / 2 + 5) * inv) / S);
         return segs.map((s, j) => <Line key={'l' + i + '_' + j} points={[...P(s.a), ...P(s.b)]} stroke={color} strokeWidth={0.5} strokeScaleEnabled={false} listening={false} />);
       })}
-      {/* inward arrowheads at each segment's ends (◀ 5'0" ▶) instead of slash ticks */}
-      {g.segments.map((seg, i) => {
-        const [p0, p1] = seg.line;
-        return (
-          <React.Fragment key={'a' + i}>
-            <DimArrow x={p0.x * S} y={p0.y * S} ang={Math.atan2(p1.y - p0.y, p1.x - p0.x) * 180 / Math.PI} color={color} inv={inv} />
-            <DimArrow x={p1.x * S} y={p1.y * S} ang={Math.atan2(p0.y - p1.y, p0.x - p1.x) * 180 / Math.PI} color={color} inv={inv} />
-          </React.Fragment>
-        );
-      })}
+      {/* 45° slash ticks at each station (architectural style) */}
+      {g.ticks.map((tk, i) => <Line key={'tk' + i} points={[...P(tk[0]), ...P(tk[1])]} stroke={color} strokeWidth={0.5} strokeScaleEnabled={false} listening={false} />)}
       {g.segments.map((seg, i) => {
         const w = seg.label.text.length * 5 + 6;
         return (
