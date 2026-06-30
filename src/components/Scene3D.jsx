@@ -11,6 +11,7 @@ import Wall3D from './three/Wall3D.jsx';
 import Stair3D from './three/Stair3D.jsx';
 import Fence3D from './three/Fence3D.jsx';
 import Edit3D from './three/Edit3D.jsx';
+import Object3D from './three/Object3D.jsx';
 
 // Compute the plan center + extent so we can frame the camera nicely.
 function useBounds(walls, fences) {
@@ -36,6 +37,7 @@ export default function Scene3D() {
   const fences = useStore((s) => s.fences);
   const gates = useStore((s) => s.gates);
   const stairs = useStore((s) => s.stairs);
+  const objects = useStore((s) => s.objects);
   const layers = useStore((s) => s.layers);
   const wallHeight = useStore((s) => s.wallHeight);
   const theme = useStore((s) => s.theme);
@@ -156,6 +158,12 @@ export default function Scene3D() {
         {/* stairs */}
         {layers.stairs && stairs.map((stp) => (
           <Stair3D key={stp.id} stair={stp} selection={selection} onSelect={select} />
+        ))}
+
+        {/* furniture / fixture objects */}
+        {layers.objects && objects.map((o) => (
+          <Object3D key={o.id} obj={o} selected={selection?.type === 'object' && selection.id === o.id}
+            onSelect={(id) => select({ type: 'object', id })} />
         ))}
 
         {/* direct-manipulation gizmos for the current selection (move/rotate/height);
