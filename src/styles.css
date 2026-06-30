@@ -620,6 +620,8 @@ button:focus-visible,
   box-shadow: var(--shadow-lg); white-space: nowrap;
   pointer-events: auto;
 }
+/* column variant: pill runs vertically so it follows a vertical wall/opening */
+.wall-quick.wq-col { flex-direction: column; }
 .wall-quick .wq-thick { display: flex; align-items: center; gap: 6px; }
 .wall-quick .wq-val {
   min-width: 30px; text-align: center; font-size: 12.5px; font-weight: 700;

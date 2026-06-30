@@ -1582,17 +1582,21 @@ export default function Canvas2D() {
         // the pill sits outside the room instead of covering it
         let nx = -(b.y - a.y) / L, ny = (b.x - a.x) / L;
         if (nx * (wallCentroid.x - mid.x) + ny * (wallCentroid.y - mid.y) > 0) { nx = -nx; ny = -ny; }
+        // a near-vertical wall gets a COLUMN pill so it runs along the wall and
+        // tucks into the offset gap instead of jutting across the plan
+        const vertical = Math.abs(b.y - a.y) > Math.abs(b.x - a.x);
         const band = (selWall.thickness || 0.5) * scale * view.k;
-        const off = band * 0.5 + (coarse ? 52 : 40);
+        const off = band * 0.5 + (coarse ? 60 : 48);
         const px = view.x + mid.x * scale * view.k + nx * off;
         const py = view.y + mid.y * scale * view.k + ny * off;
-        const cx = Math.max(74, Math.min(size.w - 74, px));
-        const cy = Math.max(26, Math.min(size.h - 26, py));
+        const mX = vertical ? 40 : 80, mY = vertical ? 72 : 28;
+        const cx = Math.max(mX, Math.min(size.w - mX, px));
+        const cy = Math.max(mY, Math.min(size.h - mY, py));
         const inch = +(selWall.thickness * 12).toFixed(1);
         const stepT = (d) => store.updateElement('wall', selWall.id, { thickness: Math.max(1, Math.min(24, inch + d)) / 12 }, true);
         const stop = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); fn(); };
         return (
-          <div className="wall-quick" style={{ left: cx, top: cy }}
+          <div className={'wall-quick' + (vertical ? ' wq-col' : '')} style={{ left: cx, top: cy }}
             onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
             <div className="wq-thick">
               <button onMouseDown={stop(() => stepT(-0.5))} aria-label="Thinner">−</button>
@@ -1617,17 +1621,19 @@ export default function Canvas2D() {
         // outward (away from the building centroid) so it sits outside, not over the room
         let nx = -(b.y - a.y) / L, ny = (b.x - a.x) / L;
         if (nx * (wallCentroid.x - mid.x) + ny * (wallCentroid.y - mid.y) > 0) { nx = -nx; ny = -ny; }
+        const vertical = Math.abs(b.y - a.y) > Math.abs(b.x - a.x); // column pill on vertical walls
         const band = (host.thickness || 0.5) * scale * view.k;
-        const off = band * 0.5 + (coarse ? 64 : 52); // sit well clear of the door/window so it isn't blocked
+        const off = band * 0.5 + (coarse ? 70 : 56); // sit well clear of the door/window so it isn't blocked
         const px = view.x + mid.x * scale * view.k + nx * off;
         const py = view.y + mid.y * scale * view.k + ny * off;
-        const cx = Math.max(86, Math.min(size.w - 86, px));
-        const cy = Math.max(26, Math.min(size.h - 26, py));
+        const mX = vertical ? 40 : 90, mY = vertical ? 72 : 28;
+        const cx = Math.max(mX, Math.min(size.w - mX, px));
+        const cy = Math.max(mY, Math.min(size.h - mY, py));
         const inch = Math.round(selOpening.width * 12);
         const stepW = (d) => store.updateElement('opening', selOpening.id, { width: Math.max(6, Math.min(144, inch + d)) / 12 }, true);
         const stop = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); fn(); };
         return (
-          <div className="wall-quick" style={{ left: cx, top: cy }}
+          <div className={'wall-quick' + (vertical ? ' wq-col' : '')} style={{ left: cx, top: cy }}
             onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
             <div className="wq-thick">
               <button onMouseDown={stop(() => stepW(-2))} aria-label="Narrower">−</button>
