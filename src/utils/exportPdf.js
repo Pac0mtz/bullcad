@@ -450,26 +450,23 @@ function drawLegend(doc, q, model, opts, x, y, w, h) {
     doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.6); doc.line(x + pad, cy, right, cy); cy += 14;
   };
   // a label/value row, optional symbol on the left and an optional small gray
-  // sub-note under it; the hairline separator is drawn AFTER the sub-note.
+  // sub-note under it; the hairline separator is drawn AFTER the sub-note, with
+  // generous padding above/below so text never touches the rules.
   const row = (label, val, sym, sub) => {
     doc.setTextColor(10, 37, 64); doc.setFont('Poppins', 'normal'); doc.setFontSize(10);
     if (sym) { drawFenceSymbol(doc, sym.style, sym.color, x + pad, cy - 3, 20); doc.text(label, x + pad + 26, cy); }
     else doc.text(label, x + pad, cy);
     doc.setFont('Poppins', 'bold'); doc.text(String(val), right, cy, { align: 'right' });
-    cy += sub ? 9 : 6;
-    if (sub) { doc.setFont('Poppins', 'normal'); doc.setFontSize(7.4); doc.setTextColor(125, 137, 152); doc.text(sub, x + pad, cy); cy += 7; }
+    cy += sub ? 13 : 10; // gap below the row's main text
+    if (sub) {
+      doc.setFont('Poppins', 'normal'); doc.setTextColor(125, 137, 152);
+      let fs = 7.6; doc.setFontSize(fs);
+      const maxW = w - pad * 2; // shrink long breakdowns so they never clip the edge
+      while (fs > 5.6 && doc.getTextWidth(sub) > maxW) { fs -= 0.3; doc.setFontSize(fs); }
+      doc.text(sub, x + pad, cy); cy += 11;
+    }
     doc.setDrawColor(236, 240, 245); doc.setLineWidth(0.4); doc.line(x + pad, cy, right, cy);
-    cy += 11;
-  };
-  // small grey note line (component breakdown), no rule. Starts at the left
-  // margin (not indented under the symbol) and shrinks to fit so long breakdowns
-  // like "20 posts · 20 sections · 269 boards · 1 gate" never clip the edge.
-  const note = (t) => {
-    doc.setFont('Poppins', 'normal'); doc.setTextColor(120, 132, 148);
-    let fs = 7.6; doc.setFontSize(fs);
-    const maxW = w - pad * 2;
-    while (fs > 5.6 && doc.getTextWidth(t) > maxW) { fs -= 0.3; doc.setFontSize(fs); }
-    doc.text(t, x + pad, cy); cy += 11;
+    cy += 14; // gap below the separator before the next row
   };
 
   section('Quantities');
@@ -483,10 +480,9 @@ function drawLegend(doc, q, model, opts, x, y, w, h) {
   if (Object.keys(fc).length) {
     section('Fence Schedule');
     for (const v of Object.values(fc)) {
-      row(v.label, `${v.lf.toFixed(1)} ft`, v);
       const parts = [`${v.posts} posts`, `${v.sections} sections`, `${v.comp.n} ${v.comp.label.toLowerCase()}`];
       if (v.gates) parts.push(`${v.gates} gate${v.gates > 1 ? 's' : ''}`);
-      note(parts.join('  ·  '));
+      row(v.label, `${v.lf.toFixed(1)} ft`, v, parts.join('  ·  '));
     }
     row('Total fence ft', q.fenceLF.toFixed(1));
     row('Total posts / gates', `${q.postCount} / ${q.gateCount}`);
@@ -507,7 +503,7 @@ function drawLegend(doc, q, model, opts, x, y, w, h) {
     const markX = x + pad + 20, sizeX = x + pad + 56; // leave room for the icon
     doc.setFontSize(8); doc.setTextColor(120, 132, 148); doc.setFont('Poppins', 'bold');
     doc.text('MARK', markX, cy); doc.text('SIZE', sizeX, cy); doc.text('QTY', right, cy, { align: 'right' });
-    cy += 12;
+    cy += 15;
     for (const g of list) {
       const mark = pre[g.type] + (++marks[g.type]);
       drawOpeningSymbol(doc, g.type, x + pad, cy - 1, 12); // mark icon
@@ -518,9 +514,9 @@ function drawLegend(doc, q, model, opts, x, y, w, h) {
       doc.text(size, sizeX, cy);
       doc.text('×' + g.n, right, cy, { align: 'right' });
       doc.setTextColor(120, 132, 148); doc.setFontSize(7.5);
-      doc.text(g.type === 'window' && g.style ? `${g.type} · ${g.style}` : g.type, sizeX, cy + 7);
-      doc.setDrawColor(232, 237, 243); doc.setLineWidth(0.4); doc.line(x + pad, cy + 10, right, cy + 10);
-      cy += 18;
+      doc.text(g.type === 'window' && g.style ? `${g.type} · ${g.style}` : g.type, sizeX, cy + 8);
+      doc.setDrawColor(232, 237, 243); doc.setLineWidth(0.4); doc.line(x + pad, cy + 15, right, cy + 15);
+      cy += 25;
     }
   }
 
@@ -533,9 +529,9 @@ function drawLegend(doc, q, model, opts, x, y, w, h) {
       doc.setTextColor(10, 37, 64); doc.setFont('Poppins', 'normal'); doc.setFontSize(10);
       doc.text(v.label, x + pad + 26, cy);
       doc.setFont('Poppins', 'bold'); doc.text(String(v.count), right, cy, { align: 'right' });
-      cy += 6;
+      cy += 10;
       doc.setDrawColor(236, 240, 245); doc.setLineWidth(0.4); doc.line(x + pad, cy, right, cy);
-      cy += 11;
+      cy += 14;
     }
     if (q.affectedRooms) row('Affected rooms', q.affectedRooms);
     if (q.affectedRegions) row('Affected regions', `${q.affectedRegions} · ${Math.round(q.affectedRegionArea || 0)} sq ft`);

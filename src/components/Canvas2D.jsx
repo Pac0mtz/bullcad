@@ -1578,13 +1578,12 @@ export default function Canvas2D() {
         const a = selWall.a, b = selWall.b;
         const mid = lerp(a, b, 0.5);
         const L = dist(a, b) || 1;
-        // perpendicular unit, biased to the lower side so the pill clears the wall
-        // line instead of sitting on top of it (below for horizontal walls, off to
-        // the side for vertical ones)
+        // perpendicular unit, pointed OUTWARD (away from the building centroid) so
+        // the pill sits outside the room instead of covering it
         let nx = -(b.y - a.y) / L, ny = (b.x - a.x) / L;
-        if (ny < 0) { nx = -nx; ny = -ny; }
+        if (nx * (wallCentroid.x - mid.x) + ny * (wallCentroid.y - mid.y) > 0) { nx = -nx; ny = -ny; }
         const band = (selWall.thickness || 0.5) * scale * view.k;
-        const off = band * 0.5 + (coarse ? 44 : 34);
+        const off = band * 0.5 + (coarse ? 52 : 40);
         const px = view.x + mid.x * scale * view.k + nx * off;
         const py = view.y + mid.y * scale * view.k + ny * off;
         const cx = Math.max(74, Math.min(size.w - 74, px));
@@ -1615,10 +1614,11 @@ export default function Canvas2D() {
         const a = seg?.a || host.a, b = seg?.b || host.b;
         const mid = lerp(a, b, selOpening.t);
         const L = dist(a, b) || 1;
+        // outward (away from the building centroid) so it sits outside, not over the room
         let nx = -(b.y - a.y) / L, ny = (b.x - a.x) / L;
-        if (ny < 0) { nx = -nx; ny = -ny; }
+        if (nx * (wallCentroid.x - mid.x) + ny * (wallCentroid.y - mid.y) > 0) { nx = -nx; ny = -ny; }
         const band = (host.thickness || 0.5) * scale * view.k;
-        const off = band * 0.5 + (coarse ? 72 : 60); // sit well clear of the door/window so it isn't blocked
+        const off = band * 0.5 + (coarse ? 64 : 52); // sit well clear of the door/window so it isn't blocked
         const px = view.x + mid.x * scale * view.k + nx * off;
         const py = view.y + mid.y * scale * view.k + ny * off;
         const cx = Math.max(86, Math.min(size.w - 86, px));
