@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer, Line, Circle, Text, Group, Rect, Shape } from 'react-konva';
 import { useStore } from '../store.js';
 import {
-  dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, wallPolygons, stairGeometry, snapAngle, detectRooms, roomWalls, roomSignature, parseLength, simplifyPath, EQUIPMENT,
+  dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, wallPolygons, stairGeometry, snapAngle, detectRooms, roomWalls, roomSignature, parseLength, simplifyPath, EQUIPMENT, FENCE_TYPES,
 } from '../utils/geometry.js';
 
 const FENCE_THICK = 0.3; // nominal fence body width (ft) for alignment offset
@@ -175,7 +175,11 @@ export default function Canvas2D() {
       const wasDrag = dragging; down = null; dragging = false;
       if (wasDrag) {
         const pts = regionLiveRef.current; regionLiveRef.current = []; setLiveRegion(null);
-        if (pts.length >= 3) { const simp = simplifyPath(pts, 0.4); if (simp.length >= 3) { store.addRegion(simp); setRegionDraft(null); } }
+        if (pts.length >= 3) {
+          let simp = simplifyPath(pts, 0.4);
+          if (snapEnabled) simp = simp.map((p) => snapPt(p, minorStep)); // snap the traced outline to the grid
+          if (simp.length >= 3) { store.addRegion(simp); setRegionDraft(null); } // addRegion returns to Select
+        }
         regionSuppress.current = true; setTimeout(() => { regionSuppress.current = false; }, 60); // eat the trailing click
       }
     };
@@ -940,6 +944,14 @@ export default function Canvas2D() {
     return m;
   }, [gates]);
   const ROW_GAP = 1.6; // ft — push the overall row out past the opening string
+  // Outward SCREEN offset (px) for a quick-action pill so it clears the element
+  // body AND the dimension strings. Dimensions scale with the plan, so the gap
+  // must scale with zoom too — otherwise the pill lands on the numbers when you
+  // zoom in. Keeps quick actions off walls/fences/components at any zoom.
+  const pillOffsetPx = (thickFt) => {
+    const dimReach = dimMode !== 'off' ? (dimOffset + ROW_GAP + 0.8) : 0.6; // ft the dims extend outward
+    return (thickFt * 0.5 + dimReach) * scale * view.k + (coarse ? 16 : 12);
+  };
   // Justified, miter-joined endpoints per wall/fence so corners stay clean when
   // the drawn line is shifted to a face (interior/exterior). See justifiedSegments.
   const wallSegs = useMemo(
@@ -1408,13 +1420,21 @@ export default function Canvas2D() {
           {/* affected-region drawing preview (click-corners chain + live freehand) */}
           {tool === 'region' && (regionDraft || liveRegion) && (
             <Group listening={false}>
-              {regionDraft && regionDraft.length > 0 && (
+              {regionDraft && regionDraft.length > 0 && (() => {
+                const nearClose = regionDraft.length >= 3 && cursor && dist(cursor, regionDraft[0]) < 0.6;
+                return (
                 <>
                   <Line points={[...regionDraft.flatMap((p) => [p.x * scale, p.y * scale]), ...(cursor ? [cursor.x * scale, cursor.y * scale] : [])]}
-                    stroke="#b45309" strokeWidth={1.5 / view.k} dash={[6 / view.k, 4 / view.k]} />
+                    stroke="#b45309" strokeWidth={1.5 / view.k} dash={[6 / view.k, 4 / view.k]} closed={nearClose} />
                   {regionDraft.map((p, i) => <Circle key={i} x={p.x * scale} y={p.y * scale} radius={4 / view.k} fill="#b45309" />)}
+                  {/* snap-to-close indicator: a ring on the first point when the cursor is near it */}
+                  {nearClose && (
+                    <Circle x={regionDraft[0].x * scale} y={regionDraft[0].y * scale} radius={9 / view.k}
+                      fill="rgba(37,99,235,0.18)" stroke={BLUE} strokeWidth={2 / view.k} />
+                  )}
                 </>
-              )}
+                );
+              })()}
               {liveRegion && <Line points={liveRegion.flatMap((p) => [p.x * scale, p.y * scale])} stroke="#b45309" strokeWidth={2 / view.k} tension={0.3} lineCap="round" lineJoin="round" />}
             </Group>
           )}
@@ -1585,8 +1605,7 @@ export default function Canvas2D() {
         // a near-vertical wall gets a COLUMN pill so it runs along the wall and
         // tucks into the offset gap instead of jutting across the plan
         const vertical = Math.abs(b.y - a.y) > Math.abs(b.x - a.x);
-        const band = (selWall.thickness || 0.5) * scale * view.k;
-        const off = band * 0.5 + (coarse ? 60 : 48);
+        const off = pillOffsetPx(selWall.thickness || 0.5);
         const px = view.x + mid.x * scale * view.k + nx * off;
         const py = view.y + mid.y * scale * view.k + ny * off;
         const mX = vertical ? 40 : 80, mY = vertical ? 72 : 28;
@@ -1622,8 +1641,7 @@ export default function Canvas2D() {
         let nx = -(b.y - a.y) / L, ny = (b.x - a.x) / L;
         if (nx * (wallCentroid.x - mid.x) + ny * (wallCentroid.y - mid.y) > 0) { nx = -nx; ny = -ny; }
         const vertical = Math.abs(b.y - a.y) > Math.abs(b.x - a.x); // column pill on vertical walls
-        const band = (host.thickness || 0.5) * scale * view.k;
-        const off = band * 0.5 + (coarse ? 70 : 56); // sit well clear of the door/window so it isn't blocked
+        const off = pillOffsetPx(host.thickness || 0.5) + 14; // a touch past the wall pill so it clears the dim string
         const px = view.x + mid.x * scale * view.k + nx * off;
         const py = view.y + mid.y * scale * view.k + ny * off;
         const mX = vertical ? 40 : 90, mY = vertical ? 72 : 28;
@@ -1642,6 +1660,69 @@ export default function Canvas2D() {
             </div>
             <button className="wq-dup" onMouseDown={stop(() => store.duplicateElement('opening', selOpening.id))} aria-label={`Duplicate ${selOpening.type}`}><IconDuplicate style={{ width: 15, height: 15 }} /></button>
             <button className="wq-del" onMouseDown={stop(() => store.deleteSelected())} aria-label={`Delete ${selOpening.type}`}><IconTrash style={{ width: 15, height: 15 }} /></button>
+          </div>
+        );
+      })()}
+
+      {/* selected FENCE quick action — pick the fence style + delete (mirrors the
+          wall pill: outward offset, column on vertical fences) */}
+      {selFence && tool === 'select' && (() => {
+        const a = selFence.a, b = selFence.b;
+        const mid = lerp(a, b, 0.5);
+        const L = dist(a, b) || 1;
+        let nx = -(b.y - a.y) / L, ny = (b.x - a.x) / L;
+        if (nx * (fenceCentroid.x - mid.x) + ny * (fenceCentroid.y - mid.y) > 0) { nx = -nx; ny = -ny; }
+        const vertical = Math.abs(b.y - a.y) > Math.abs(b.x - a.x);
+        const off = pillOffsetPx(FENCE_THICK);
+        const px = view.x + mid.x * scale * view.k + nx * off;
+        const py = view.y + mid.y * scale * view.k + ny * off;
+        const mX = vertical ? 70 : 100, mY = vertical ? 64 : 28;
+        const cx = Math.max(mX, Math.min(size.w - mX, px));
+        const cy = Math.max(mY, Math.min(size.h - mY, py));
+        const stop = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); fn(); };
+        const pickStyle = (key) => { const ft = FENCE_TYPES[key] || {}; store.updateElement('fence', selFence.id, { fenceType: key, height: ft.height, color: ft.color, ...(ft.cap ? { picketCap: ft.cap } : {}) }, true); };
+        return (
+          <div className={'wall-quick' + (vertical ? ' wq-col' : '')} style={{ left: cx, top: cy }}
+            onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+            <select className="rq-name fq-style" value={selFence.fenceType} title="Fence style"
+              onMouseDown={(e) => e.stopPropagation()} onChange={(e) => pickStyle(e.target.value)}>
+              {Object.entries(FENCE_TYPES).map(([key, ft]) => <option key={key} value={key}>{ft.label}</option>)}
+            </select>
+            <button className="wq-del" onMouseDown={stop(() => store.deleteSelected())} aria-label="Delete fence"><IconTrash style={{ width: 15, height: 15 }} /></button>
+          </div>
+        );
+      })()}
+
+      {/* selected GATE quick action — step width, duplicate, or delete */}
+      {selGate && tool === 'select' && (() => {
+        const host = fences.find((f) => f.id === selGate.fenceId);
+        if (!host) return null;
+        const seg = fenceSegs.get(host.id);
+        const a = seg?.a || host.a, b = seg?.b || host.b;
+        const mid = lerp(a, b, selGate.t);
+        const L = dist(a, b) || 1;
+        let nx = -(b.y - a.y) / L, ny = (b.x - a.x) / L;
+        if (nx * (fenceCentroid.x - mid.x) + ny * (fenceCentroid.y - mid.y) > 0) { nx = -nx; ny = -ny; }
+        const vertical = Math.abs(b.y - a.y) > Math.abs(b.x - a.x);
+        const off = pillOffsetPx(FENCE_THICK) + 14;
+        const px = view.x + mid.x * scale * view.k + nx * off;
+        const py = view.y + mid.y * scale * view.k + ny * off;
+        const mX = vertical ? 40 : 90, mY = vertical ? 72 : 28;
+        const cx = Math.max(mX, Math.min(size.w - mX, px));
+        const cy = Math.max(mY, Math.min(size.h - mY, py));
+        const inch = Math.round(selGate.width * 12);
+        const stepW = (d) => store.updateElement('gate', selGate.id, { width: Math.max(12, Math.min(240, inch + d)) / 12 }, true);
+        const stop = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); fn(); };
+        return (
+          <div className={'wall-quick' + (vertical ? ' wq-col' : '')} style={{ left: cx, top: cy }}
+            onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+            <div className="wq-thick">
+              <button onMouseDown={stop(() => stepW(-6))} aria-label="Narrower">−</button>
+              <span className="wq-val">{inch}″</span>
+              <button onMouseDown={stop(() => stepW(6))} aria-label="Wider">+</button>
+            </div>
+            <button className="wq-dup" onMouseDown={stop(() => store.duplicateElement('gate', selGate.id))} aria-label="Duplicate gate"><IconDuplicate style={{ width: 15, height: 15 }} /></button>
+            <button className="wq-del" onMouseDown={stop(() => store.deleteSelected())} aria-label="Delete gate"><IconTrash style={{ width: 15, height: 15 }} /></button>
           </div>
         );
       })()}

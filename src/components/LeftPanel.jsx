@@ -142,6 +142,15 @@ export default function LeftPanel({ onCollapse }) {
       {/* Restoration — drying-map equipment + affected-area marking (separate from Tools) */}
       <Section title="Restoration" {...sec('restoration')}>
         <div className="lib-grid">
+          {/* quick-access Select + Pan (duplicated from Tools) so you don't scroll up */}
+          <div className={'lib-item' + (tool === 'select' ? ' active' : '')} onClick={() => setTool('select')}>
+            <div className="ico"><IconSelect style={{ width: 24, height: 24 }} /></div>
+            <div className="nm">Select</div>
+          </div>
+          <div className={'lib-item' + (tool === 'pan' ? ' active' : '')} onClick={() => setTool('pan')}>
+            <div className="ico"><IconPan style={{ width: 24, height: 24 }} /></div>
+            <div className="nm">Pan</div>
+          </div>
           {EQUIPMENT_ORDER.map((kind) => {
             const meta = EQUIPMENT[kind];
             const Icon = EQUIP_ICON[kind] || IconDroplet;
@@ -355,6 +364,14 @@ export default function LeftPanel({ onCollapse }) {
           <label>Scale — {scale} px / ft</label>
           <input type="range" min="6" max="30" step="1" value={scale} style={{ width: '100%' }}
             onChange={(e) => setScale(parseInt(e.target.value))} />
+        </div>
+        <div className="field">
+          <label>Grid spacing</label>
+          <select value={s.grid} onChange={(e) => setDefault('grid', parseFloat(e.target.value))}>
+            <option value={0.5}>6 in</option>
+            <option value={1}>1 ft</option>
+            <option value={2}>2 ft</option>
+          </select>
         </div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: 'var(--muted)' }}>
           <input type="checkbox" checked={snapEnabled} onChange={(e) => setSnap(e.target.checked)} />

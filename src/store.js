@@ -401,7 +401,9 @@ export const useStore = create((set, get) => ({
     if (!points || points.length < 3) return null;
     const id = uid('region');
     get().commit((s) => ({ regions: [...(s.regions || []), { id, points: points.map((p) => ({ x: p.x, y: p.y })), category }] }));
-    set({ selection: { type: 'region', id }, multi: [{ type: 'region', id }] });
+    // select the new region AND drop back to Select — so it's immediately editable
+    // and a resize-drag can't re-trigger the region capture (which dupes regions)
+    set({ selection: { type: 'region', id }, multi: [{ type: 'region', id }], tool: 'select' });
     return id;
   },
   // move one vertex of a region (no per-tick history; commit on release)
