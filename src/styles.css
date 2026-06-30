@@ -642,6 +642,25 @@ button:focus-visible,
   background: #ef4444; color: #fff; cursor: pointer;
 }
 .wall-quick .wq-del:hover { filter: brightness(1.08); }
+/* room quick action: inline name field + grab-to-move button */
+.wall-quick .wq-move {
+  width: 26px; height: 26px; border: none; border-radius: 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.14); color: #fff; cursor: grab; touch-action: none;
+}
+.wall-quick .wq-move:hover { background: rgba(255,255,255,0.26); }
+.wall-quick .wq-move:active { cursor: grabbing; }
+.wall-quick .rq-name {
+  width: 132px; height: 26px; border: none; border-radius: 7px;
+  background: rgba(255,255,255,0.14); color: #fff; font-size: 12.5px; font-weight: 600;
+  padding: 0 9px; outline: none;
+}
+.wall-quick .rq-name::placeholder { color: rgba(255,255,255,0.5); font-weight: 500; }
+.wall-quick .rq-name:focus { background: rgba(255,255,255,0.22); box-shadow: 0 0 0 2px var(--blue, #2563eb) inset; }
+@media (pointer: coarse) {
+  .wall-quick .wq-move { width: 34px; height: 34px; }
+  .wall-quick .rq-name { height: 34px; font-size: 14px; width: 140px; }
+}
 /* equipment rotation dial — a slider between two nudge buttons */
 .wall-quick .eq-rot { display: flex; align-items: center; gap: 6px; }
 .wall-quick .eq-rot button {

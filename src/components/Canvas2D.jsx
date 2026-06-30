@@ -8,7 +8,7 @@ import {
 const FENCE_THICK = 0.3; // nominal fence body width (ft) for alignment offset
 import { CANVAS_THEME } from '../utils/theme.js';
 import { WallShape, OpeningShape, FenceShape, GateShape, PostShape, DimLabel, WallDimension, WallOpeningDims, LabelShape, StairShape, EquipmentShape } from './canvas/Shapes.jsx';
-import { IconZoomIn, IconZoomOut, IconFit, IconTrash, IconDuplicate } from './Icons.jsx';
+import { IconZoomIn, IconZoomOut, IconFit, IconTrash, IconDuplicate, IconMove } from './Icons.jsx';
 import Compass from './Compass.jsx';
 
 const NAVY = '#0a2540';
@@ -635,6 +635,28 @@ export default function Canvas2D() {
     drag.current = { kind: 'roomLabel', sig: rm.sig, moved: false, before: useStore.getState().snapshotGeom() };
   };
 
+  // start a room/label move from the HTML quick-action button (outside the Konva
+  // stage). Seeds drag.current from the press point in feet, then the stage's
+  // onMouseMove + the window mouseup take over (commit + weld) like any handle.
+  const clientToFeet = (cx, cy) => {
+    const cont = stageRef.current?.container(); if (!cont) return null;
+    const r = cont.getBoundingClientRect(), v = viewRef.current, sc = scaleRef.current;
+    return { x: ((cx - r.left) - v.x) / (v.k * sc), y: ((cy - r.top) - v.y) / (v.k * sc) };
+  };
+  const startRoomQuickMove = (rm, mode) => (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (tool !== 'select') return;
+    store.selectRoom(rm.sig, rm.wallIds);
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    const f = clientToFeet(cx, cy); if (!f) return;
+    if (mode === 'label') {
+      drag.current = { kind: 'roomLabel', sig: rm.sig, moved: false, before: useStore.getState().snapshotGeom() };
+    } else {
+      drag.current = { kind: 'group', items: rm.wallIds.map((id) => ({ type: 'wall', id })), last: snapEnabled ? snapPt(f, minorStep) : f, moved: false, before: useStore.getState().snapshotGeom() };
+    }
+  };
+
   // drag the group bounding box to move every selected element together
   const startGroupDrag = (e) => {
     e.cancelBubble = true;
@@ -881,6 +903,7 @@ export default function Canvas2D() {
   const selOpening = selection?.type === 'opening' ? openings.find((o) => o.id === selection.id) : null;
   const selGate = selection?.type === 'gate' ? gates.find((g) => g.id === selection.id) : null;
   const selEquip = selection?.type === 'equip' ? equips.find((eq) => eq.id === selection.id) : null;
+  const selRoomData = selection?.type === 'room' ? rooms.find((rm) => rm.sig === selection.id) : null;
 
   // marquee group: set of selected ids + the group bounding box (feet)
   const multiSet = useMemo(() => new Set(multi.map((m) => m.id)), [multi]);
@@ -1323,7 +1346,6 @@ export default function Canvas2D() {
             const hitH = (rm.name && showRoomAreas) ? 42 : 24;
             const lx = rm.labelPos.x * scale, ly = rm.labelPos.y * scale;
             const setCur = (c) => (e) => { const st = e.target.getStage(); if (st) st.container().style.cursor = c; };
-            const arrows = [[0, -6, 0, 6], [-6, 0, 6, 0], [0, -6, -2.2, -3.4], [0, -6, 2.2, -3.4], [0, 6, -2.2, 3.4], [0, 6, 2.2, 3.4], [-6, 0, -3.4, -2.2], [-6, 0, -3.4, 2.2], [6, 0, 3.4, -2.2], [6, 0, 3.4, 2.2]];
             return (
               <React.Fragment key={'room' + i}>
                 <Group x={lx} y={ly} scaleX={1 / view.k} scaleY={1 / view.k}
@@ -1337,28 +1359,8 @@ export default function Canvas2D() {
                     <Text x={-W / 2} y={rm.name ? 2 : -7} width={W} align="center" text={area} fontSize={Math.max(8, (roomLabelSize || 11) - 1)} fontFamily="Poppins" fontStyle="400" fill={t.roomText} listening={false} />
                   )}
                 </Group>
-                {selRoom && (
-                  <React.Fragment>
-                    {/* move the whole ROOM — sits just ABOVE the label (blue 4-way).
-                        Offset is divided by view.k so the gap is a CONSTANT screen
-                        distance at any zoom (it doesn't drift away when zoomed in). */}
-                    <Group x={lx} y={ly + (hitTop - 13) / view.k} scaleX={1 / view.k} scaleY={1 / view.k}
-                      onMouseDown={startRoomMove(rm)} onTouchStart={startRoomMove(rm)}
-                      onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
-                      <Circle radius={10} fill={BLUE} stroke="#fff" strokeWidth={1.5} hitStrokeWidth={coarse ? 18 : 8} />
-                      {arrows.map((p, k) => <Line key={k} points={p} stroke="#fff" strokeWidth={1.4} lineCap="round" listening={false} />)}
-                    </Group>
-                    {/* move just the LABEL — sits just BELOW it (teal, text-lines icon) */}
-                    <Group x={lx} y={ly + (hitTop + hitH + 11) / view.k} scaleX={1 / view.k} scaleY={1 / view.k}
-                      onMouseDown={startRoomLabelDrag(rm)} onTouchStart={startRoomLabelDrag(rm)}
-                      onMouseEnter={setCur('move')} onMouseLeave={setCur('')}>
-                      <Circle radius={9} fill="#fff" stroke={TEAL} strokeWidth={2} hitStrokeWidth={coarse ? 18 : 8} />
-                      <Line points={[-4, -3, 4, -3]} stroke={TEAL} strokeWidth={1.4} lineCap="round" listening={false} />
-                      <Line points={[-4, 0, 3, 0]} stroke={TEAL} strokeWidth={1.4} lineCap="round" listening={false} />
-                      <Line points={[-4, 3, 2, 3]} stroke={TEAL} strokeWidth={1.4} lineCap="round" listening={false} />
-                    </Group>
-                  </React.Fragment>
-                )}
+                {/* selected-room controls now live in the HTML room-quick pill
+                    (name + move + delete) rendered in the overlay layer below */}
               </React.Fragment>
             );
           })}
@@ -1612,7 +1614,7 @@ export default function Canvas2D() {
         let nx = -(b.y - a.y) / L, ny = (b.x - a.x) / L;
         if (ny < 0) { nx = -nx; ny = -ny; }
         const band = (host.thickness || 0.5) * scale * view.k;
-        const off = band * 0.5 + (coarse ? 44 : 34);
+        const off = band * 0.5 + (coarse ? 72 : 60); // sit well clear of the door/window so it isn't blocked
         const px = view.x + mid.x * scale * view.k + nx * off;
         const py = view.y + mid.y * scale * view.k + ny * off;
         const cx = Math.max(86, Math.min(size.w - 86, px));
@@ -1659,6 +1661,29 @@ export default function Canvas2D() {
               <button onMouseDown={stop(() => setRot(deg + 15, true))} aria-label="Rotate right">⟳</button>
             </div>
             <button className="wq-del" onMouseDown={stop(() => store.deleteSelected())} aria-label="Delete equipment"><IconTrash style={{ width: 15, height: 15 }} /></button>
+          </div>
+        );
+      })()}
+
+      {/* selected-room quick action — name the room inline, drag to move it, or
+          delete; replaces the two floating canvas handles */}
+      {selRoomData && tool === 'select' && (() => {
+        const rm = selRoomData;
+        const px = view.x + rm.labelPos.x * scale * view.k;
+        const py = view.y + rm.labelPos.y * scale * view.k;
+        const cx = Math.max(120, Math.min(size.w - 120, px));
+        const cy = Math.max(28, Math.min(size.h - 28, py - (coarse ? 56 : 46)));
+        const stop = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); fn(); };
+        return (
+          <div className="wall-quick room-quick" style={{ left: cx, top: cy }}
+            onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+            <input className="rq-name" key={rm.sig} defaultValue={rm.name} placeholder="Name room…"
+              onMouseDown={(e) => e.stopPropagation()}
+              onBlur={(e) => store.setRoomName(rm.sig, e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur(); }} />
+            <button className="wq-move" title="Drag to move the room"
+              onMouseDown={startRoomQuickMove(rm, 'room')} onTouchStart={startRoomQuickMove(rm, 'room')}><IconMove style={{ width: 16, height: 16 }} /></button>
+            <button className="wq-del" onMouseDown={stop(() => store.deleteRoom(rm.wallIds))} aria-label="Delete room"><IconTrash style={{ width: 15, height: 15 }} /></button>
           </div>
         );
       })()}
