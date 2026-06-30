@@ -1,6 +1,43 @@
-import React from 'react';
-import { Group, Line, Rect, Circle, Text, Arc, Arrow } from 'react-konva';
-import { dist, lerp, angleOf, dirNormal, formatFeetInches, postsAlong, FENCE_TYPES, windowBars, wallDimGeometry, wallOpeningDimGeometry, WINDOW_STYLES, stairGeometry, EQUIPMENT } from '../../utils/geometry.js';
+import React, { useState, useEffect } from 'react';
+import { Group, Line, Rect, Circle, Text, Arc, Arrow, Image as KImage } from 'react-konva';
+import { dist, lerp, angleOf, dirNormal, formatFeetInches, postsAlong, FENCE_TYPES, windowBars, wallDimGeometry, wallOpeningDimGeometry, WINDOW_STYLES, stairGeometry, EQUIPMENT, OBJECTS, objectFootprint } from '../../utils/geometry.js';
+
+// shared image cache so each object PNG loads once across all instances
+const _objImgCache = new Map();
+function useObjectImage(key) {
+  const [img, setImg] = useState(() => _objImgCache.get(key) || null);
+  useEffect(() => {
+    if (_objImgCache.has(key)) { setImg(_objImgCache.get(key)); return; }
+    const im = new window.Image();
+    im.src = `/objects/${key}.png`;
+    im.onload = () => { _objImgCache.set(key, im); setImg(im); };
+  }, [key]);
+  return img;
+}
+
+// A placed furniture/fixture object: a rotatable PNG sized to its footprint.
+export function ObjectShape({ obj, scale, zoom = 1, selected, hovered, onHover, onSelect }) {
+  const meta = OBJECTS[obj.key] || {};
+  const img = useObjectImage(obj.key);
+  const aspect = img ? img.height / img.width : (meta.ar || 1);
+  const { wFt, hFt } = objectFootprint(obj.size || meta.size || 3, aspect);
+  const w = wFt * scale, h = hFt * scale;
+  const down = (e) => { onSelect && onSelect(e); };
+  return (
+    <Group x={obj.x * scale} y={obj.y * scale} rotation={obj.rotation || 0}
+      onMouseDown={down} onTouchStart={down}
+      onMouseEnter={onHover ? () => onHover(obj.id) : undefined}
+      onMouseLeave={onHover ? () => onHover(null) : undefined}>
+      {img
+        ? <KImage image={img} x={-w / 2} y={-h / 2} width={w} height={h} />
+        : <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill="#e2e8f0" stroke="#94a3b8" strokeWidth={1} cornerRadius={2} />}
+      {(selected || hovered) && (
+        <Rect x={-w / 2} y={-h / 2} width={w} height={h} stroke={selected ? BLUE : '#60a5fa'}
+          strokeWidth={(selected ? 2 : 1.5) / zoom} dash={selected ? undefined : [6 / zoom, 4 / zoom]} listening={false} />
+      )}
+    </Group>
+  );
+}
 
 const TEAL = '#14b8a6';
 const NAVY = '#0a2540';

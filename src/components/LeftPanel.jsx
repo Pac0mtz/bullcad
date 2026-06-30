@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store.js';
 import { Section, PanelHead } from './ui.jsx';
-import { FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS, EQUIPMENT, EQUIPMENT_ORDER } from '../utils/geometry.js';
+import { FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS, EQUIPMENT, EQUIPMENT_ORDER, OBJECTS, OBJECT_ORDER, OBJECT_CATS } from '../utils/geometry.js';
 import { IconFan, IconDehu, IconScrubber, IconHeater, IconDroplet } from './Icons.jsx';
 import FenceElevation from './FenceElevation.jsx';
 
@@ -177,6 +177,30 @@ export default function LeftPanel({ onCollapse }) {
         </p>
       </Section>
 
+      {/* Objects — furniture & fixtures placed as PNG symbols */}
+      <Section title="Objects" {...sec('objects')}>
+        {OBJECT_CATS.map((cat) => (
+          <div key={cat} style={{ marginBottom: 6 }}>
+            <div className="muted" style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', margin: '4px 2px 6px' }}>{cat}</div>
+            <div className="lib-grid">
+              {OBJECT_ORDER.filter((k) => OBJECTS[k].cat === cat).map((key) => {
+                const active = tool === 'object' && s.objectKind === key;
+                return (
+                  <div key={key} className={'lib-item' + (active ? ' active' : '')}
+                    onClick={() => { setDefault('objectKind', key); setTool('object'); }}>
+                    <div className="ico" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 30 }}>
+                      <img src={`/objects/${key}.png`} alt="" style={{ maxWidth: 30, maxHeight: 30, objectFit: 'contain' }} />
+                    </div>
+                    <div className="nm">{OBJECTS[key].label}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        <p className="empty-note" style={{ marginTop: 6 }}>Pick an object and click the plan to drop it. Select it to rotate, duplicate, move, or delete.</p>
+      </Section>
+
       {/* Wall options — contextual to the wall/room/select tools */}
       {(tool === 'wall' || tool === 'room' || tool === 'select') && (
         <Section title={tool === 'room' ? 'Room Walls' : 'Wall'} {...sec('wall')}>
@@ -347,6 +371,7 @@ export default function LeftPanel({ onCollapse }) {
           ['gates', 'Gates', s.gates.length],
           ['stairs', 'Stairs', s.stairs.length],
           ['equipment', 'Restoration', (s.equips || []).length],
+          ['objects', 'Objects', (s.objects || []).length],
           ['labels', 'Labels', s.labels.length],
           ['dims', 'Dimensions', null],
         ].map(([key, label, count]) => (

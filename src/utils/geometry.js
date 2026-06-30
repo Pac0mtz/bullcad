@@ -537,6 +537,64 @@ export const EQUIPMENT = {
 };
 export const EQUIPMENT_ORDER = ['airMover', 'dehu', 'airScrubber', 'heater', 'sensor'];
 
+// ----- Furniture / fixture objects (PNGs in /public/objects) -----
+// `size` = longest side in feet (the short side follows the image's aspect ratio
+// at render). `cat` groups them in the palette. `file` = base PNG name.
+export const OBJECTS = {
+  // Kitchen — `ar` is the source PNG's height/width
+  refrigerator: { label: 'Refrigerator', size: 3,   ar: 1,     cat: 'Kitchen' },
+  oven:         { label: 'Range / Oven', size: 2.5, ar: 1,     cat: 'Kitchen' },
+  cookTop:      { label: 'Cooktop',      size: 2.5, ar: 1,     cat: 'Kitchen' },
+  dishwasher:   { label: 'Dishwasher',   size: 2,   ar: 1,     cat: 'Kitchen' },
+  sink:         { label: 'Sink',         size: 2.5, ar: 1,     cat: 'Kitchen' },
+  doubleSink:   { label: 'Double sink',  size: 3,   ar: 0.5,   cat: 'Kitchen' },
+  counterMiddle:{ label: 'Counter',      size: 2.5, ar: 1,     cat: 'Kitchen' },
+  counterCorner:{ label: 'Counter corner', size: 2.5, ar: 1,   cat: 'Kitchen' },
+  counterEnd:   { label: 'Counter end',  size: 2.5, ar: 1,     cat: 'Kitchen' },
+  // Bath
+  toilet:       { label: 'Toilet',       size: 2.5, ar: 1.27,  cat: 'Bath' },
+  bath:         { label: 'Bathtub',      size: 5,   ar: 0.5,   cat: 'Bath' },
+  showerRect:   { label: 'Shower',       size: 5,   ar: 0.5,   cat: 'Bath' },
+  showerSquare: { label: 'Shower (sq)',  size: 3,   ar: 1,     cat: 'Bath' },
+  bathroomSink: { label: 'Vanity sink',  size: 2,   ar: 0.5,   cat: 'Bath' },
+  // Bedroom
+  queenBed:     { label: 'Queen bed',    size: 6.7, ar: 1.333, cat: 'Bedroom' },
+  twinBed:      { label: 'Twin bed',     size: 6.25, ar: 2,    cat: 'Bedroom' },
+  // Living
+  sofa:         { label: 'Sofa',         size: 7,   ar: 0.5,   cat: 'Living' },
+  loveSeat:     { label: 'Loveseat',     size: 5,   ar: 0.5,   cat: 'Living' },
+  chair:        { label: 'Chair',        size: 2,   ar: 1,     cat: 'Living' },
+  coffeeTable:  { label: 'Coffee table', size: 3.5, ar: 0.5,   cat: 'Living' },
+  endTable:     { label: 'End table',    size: 2,   ar: 1,     cat: 'Living' },
+  tableRect:    { label: 'Table',        size: 5,   ar: 0.5,   cat: 'Living' },
+  tableRound:   { label: 'Round table',  size: 4,   ar: 1,     cat: 'Living' },
+  // Laundry
+  washer:       { label: 'Washer',       size: 2.3, ar: 1,     cat: 'Laundry' },
+  dryer:        { label: 'Dryer',        size: 2.3, ar: 1,     cat: 'Laundry' },
+  washerDryer:  { label: 'Washer/Dryer', size: 4.6, ar: 1,     cat: 'Laundry' },
+  // Doors & windows (drawable furniture-style symbols)
+  singleDoor:   { label: 'Single door',  size: 3,   ar: 1,     cat: 'Doors' },
+  doubleDoor:   { label: 'Double door',  size: 5,   ar: 0.5,   cat: 'Doors' },
+  bifoldDoor:   { label: 'Bifold door',  size: 3,   ar: 0.3,   cat: 'Doors' },
+  pocketDoor:   { label: 'Pocket door',  size: 3,   ar: 0.1,   cat: 'Doors' },
+  slidingDoor:  { label: 'Sliding door', size: 6,   ar: 0.1,   cat: 'Doors' },
+  window:       { label: 'Window',       size: 3,   ar: 0.1,   cat: 'Doors' },
+};
+export const OBJECT_ORDER = [
+  'refrigerator', 'oven', 'cookTop', 'dishwasher', 'sink', 'doubleSink', 'counterMiddle', 'counterCorner', 'counterEnd',
+  'toilet', 'bath', 'showerRect', 'showerSquare', 'bathroomSink',
+  'queenBed', 'twinBed',
+  'sofa', 'loveSeat', 'chair', 'coffeeTable', 'endTable', 'tableRect', 'tableRound',
+  'washer', 'dryer', 'washerDryer',
+  'singleDoor', 'doubleDoor', 'bifoldDoor', 'pocketDoor', 'slidingDoor', 'window',
+];
+export const OBJECT_CATS = ['Kitchen', 'Bath', 'Bedroom', 'Living', 'Laundry', 'Doors'];
+// the PNG url + rendered footprint (feet) for a placed object, given its loaded
+// aspect ratio (h/w). The longest side = `size`; the short side follows aspect.
+export const objectFootprint = (size, aspect) => (aspect >= 1
+  ? { wFt: size / aspect, hFt: size }   // portrait image
+  : { wFt: size, hFt: size * aspect });  // landscape image
+
 // ----- Wall thickness presets (US framing / masonry), value in inches -----
 export const WALL_PRESETS = [
   { label: 'Standard', inches: 6 },

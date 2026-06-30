@@ -28,7 +28,7 @@ function weldPatch(s, walls, openings) {
 }
 
 // ----- snapshot helpers for undo/redo -----
-const GEOM_KEYS = ['walls', 'openings', 'fences', 'gates', 'posts', 'labels', 'stairs', 'equips', 'regions', 'roomNames', 'roomLabelPos', 'roomAffected'];
+const GEOM_KEYS = ['walls', 'openings', 'fences', 'gates', 'posts', 'labels', 'stairs', 'equips', 'regions', 'objects', 'roomNames', 'roomLabelPos', 'roomAffected'];
 // roomNames {sig: name}, roomLabelPos {sig:{x,y}}, roomAffected {sig:true} are maps; rest are arrays
 const emptyVal = (k) => (k === 'roomNames' || k === 'roomLabelPos' || k === 'roomAffected' ? {} : []);
 const snapshot = (s) => JSON.parse(JSON.stringify(Object.fromEntries(GEOM_KEYS.map((k) => [k, s[k] ?? emptyVal(k)]))));
@@ -75,7 +75,7 @@ function samplePlan() {
     { id: uid('gate'), fenceId: fences[0].id, t: 0.5, width: 4 },
   ];
 
-  return { walls, openings, fences, gates, posts: [], labels: [], stairs: [], equips: [], regions: [], roomNames: {}, roomLabelPos: {}, roomAffected: {} };
+  return { walls, openings, fences, gates, posts: [], labels: [], stairs: [], equips: [], regions: [], objects: [], roomNames: {}, roomLabelPos: {}, roomAffected: {} };
 }
 
 // ----- autosave: persist the whole project to localStorage so a refresh (or a
@@ -131,7 +131,7 @@ export const useStore = create((set, get) => ({
   roomLabelSize: _initSettings.roomLabelSize ?? 11, // room name/area font size (px on screen, scaled in the PDF)
 
   // ----- layer visibility (view state, not part of undo history) -----
-  layers: { walls: true, openings: true, fences: true, gates: true, stairs: true, labels: true, dims: true, equipment: true },
+  layers: { walls: true, openings: true, fences: true, gates: true, stairs: true, labels: true, dims: true, equipment: true, objects: true },
   setLayer: (key, val) => set((s) => ({ layers: { ...s.layers, [key]: val } })),
   fenceType: 'wood',
   fenceHeight: FENCE_TYPES.wood.height,
@@ -140,6 +140,7 @@ export const useStore = create((set, get) => ({
   labelColors: { line: '#0a2540', arrow: '#0a2540', border: '#2563eb' }, // default label callout colors
   stairType: 'straight', stairWidth: 3.5, stairSteps: 13, // stair defaults
   equipmentKind: 'airMover', // active restoration component for the Equipment tool
+  objectKind: 'sofa',        // active furniture/fixture for the Object tool
   fenceSlats: false,         // chain-link privacy slats
   fenceSlatColor: '#2f6b3d',
   fenceBarbed: false,        // barbed-wire top (chain link)
@@ -390,6 +391,14 @@ export const useStore = create((set, get) => ({
     });
     return id;
   },
+  // place a furniture/fixture object; selects it and drops back to Select so it's
+  // immediately movable/rotatable
+  addObject: (kind, pt) => {
+    const id = uid('obj');
+    get().commit((s) => ({ objects: [...(s.objects || []), { id, key: kind, x: pt.x, y: pt.y, rotation: 0 }] }));
+    set({ selection: { type: 'object', id }, multi: [{ type: 'object', id }], tool: 'select' });
+    return id;
+  },
   // mark/unmark a detected room (by signature) as water-affected → shaded on the map
   toggleAffected: (sig) => get().commit((s) => {
     const m = { ...(s.roomAffected || {}) };
@@ -524,6 +533,7 @@ export const useStore = create((set, get) => ({
     if (ids.fence) out.fences = s.fences.map((f) => ids.fence.has(f.id) ? seg(f) : f);
     if (ids.stair) out.stairs = s.stairs.map((st) => ids.stair.has(st.id) ? { ...st, x: st.x + dx, y: st.y + dy } : st);
     if (ids.equip) out.equips = s.equips.map((eq) => ids.equip.has(eq.id) ? { ...eq, x: eq.x + dx, y: eq.y + dy } : eq);
+    if (ids.object) out.objects = s.objects.map((o) => ids.object.has(o.id) ? { ...o, x: o.x + dx, y: o.y + dy } : o);
     if (ids.region) out.regions = s.regions.map((r) => ids.region.has(r.id) ? { ...r, points: r.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) } : r);
     if (ids.label) out.labels = s.labels.map((l) => ids.label.has(l.id) ? { ...l, pos: { x: l.pos.x + dx, y: l.pos.y + dy }, anchor: { x: l.anchor.x + dx, y: l.anchor.y + dy } } : l);
     return out;
@@ -543,6 +553,7 @@ export const useStore = create((set, get) => ({
       if (ids.fence) out.fences = s.fences.map((f) => ids.fence.has(f.id) ? seg(f) : f);
       if (ids.stair) out.stairs = s.stairs.map((st) => ids.stair.has(st.id) ? { ...st, x: st.x + mx, y: st.y + my } : st);
       if (ids.equip) out.equips = s.equips.map((eq) => ids.equip.has(eq.id) ? { ...eq, x: eq.x + mx, y: eq.y + my } : eq);
+      if (ids.object) out.objects = s.objects.map((o) => ids.object.has(o.id) ? { ...o, x: o.x + mx, y: o.y + my } : o);
       if (ids.region) out.regions = s.regions.map((r) => ids.region.has(r.id) ? { ...r, points: r.points.map((p) => ({ x: p.x + mx, y: p.y + my })) } : r);
       if (ids.label) out.labels = s.labels.map((l) => ids.label.has(l.id) ? { ...l, pos: { x: l.pos.x + mx, y: l.pos.y + my }, anchor: { x: l.anchor.x + mx, y: l.anchor.y + my } } : l);
       for (const type of ['opening', 'gate', 'post']) if (ids[type]) out[type + 's'] = s[type + 's'].map((e) => ids[type].has(e.id) ? { ...e, t: Math.max(0, Math.min(1, e.t + dx * 0.04)) } : e);
@@ -555,7 +566,7 @@ export const useStore = create((set, get) => ({
     set((s) => ({
       past: [...s.past, snapshot(s)],
       future: [],
-      walls: [], openings: [], fences: [], gates: [], posts: [], labels: [], stairs: [], equips: [], regions: [], roomNames: {}, roomLabelPos: {}, roomAffected: {},
+      walls: [], openings: [], fences: [], gates: [], posts: [], labels: [], stairs: [], equips: [], regions: [], objects: [], roomNames: {}, roomLabelPos: {}, roomAffected: {},
       selection: null,
     })),
 
@@ -616,7 +627,7 @@ export const useStore = create((set, get) => ({
       return {
         past: [], future: [], selection: null, elevationTarget: null,
         pages: [{ id: 'page1', name: 'Page 1' }], activePage: 'page1', pageStore: {},
-        walls: data.walls || [], openings: data.openings || [], fences: data.fences || [], gates: data.gates || [], posts: data.posts || [], labels: data.labels || [], stairs: data.stairs || [], equips: data.equips || [], regions: data.regions || [], roomNames: data.roomNames || {}, roomLabelPos: data.roomLabelPos || {}, roomAffected: data.roomAffected || {},
+        walls: data.walls || [], openings: data.openings || [], fences: data.fences || [], gates: data.gates || [], posts: data.posts || [], labels: data.labels || [], stairs: data.stairs || [], equips: data.equips || [], regions: data.regions || [], objects: data.objects || [], roomNames: data.roomNames || {}, roomLabelPos: data.roomLabelPos || {}, roomAffected: data.roomAffected || {},
       };
     }),
 }));

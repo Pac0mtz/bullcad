@@ -6,7 +6,7 @@ import { jsPDF } from 'jspdf';
 import { svg2pdf } from 'svg2pdf.js';
 import {
   dist, lerp, angleOf, centroidOf, wallDimGeometry, wallOpeningDimGeometry, justifiedSegments, wallPolygons, WINDOW_STYLES, FENCE_TYPES, postsAlong,
-  formatFeetInches, windowBars, stairGeometry, detectRooms, roomWalls, roomSignature, EQUIPMENT,
+  formatFeetInches, windowBars, stairGeometry, detectRooms, roomWalls, roomSignature, EQUIPMENT, OBJECTS, objectFootprint,
 } from './geometry.js';
 import { computeQuantities, fenceComponents } from './quantities.js';
 
@@ -31,6 +31,7 @@ export function buildPlanSvg(model, opts = {}) {
   walls.forEach((w) => pts.push(w.a, w.b));
   fences.forEach((f) => pts.push(f.a, f.b));
   (model.labels || []).forEach((lb) => { if (lb.anchor) pts.push(lb.anchor); if (lb.pos) pts.push(lb.pos); });
+  (model.objects || []).forEach((o) => { const m = OBJECTS[o.key] || {}; const s = (o.size || m.size || 3) / 2; pts.push({ x: o.x - s, y: o.y - s }, { x: o.x + s, y: o.y + s }); });
   (model.stairs || []).forEach((st) => {
     const g = stairGeometry(st), c = Math.cos((st.rotation || 0) * Math.PI / 180), s = Math.sin((st.rotation || 0) * Math.PI / 180);
     g.outline.forEach((p) => pts.push({ x: st.x + p.x * c - p.y * s, y: st.y + p.x * s + p.y * c }));
@@ -319,6 +320,15 @@ export function buildPlanSvg(model, opts = {}) {
     const nameFs = ptFt(10 * rls / 14), areaFs = ptFt(8.5 * rls / 14); // room labels in real points too
     if (name) el.push(roomLabel(cx, cy - (showArea ? areaFs * 0.75 : -areaFs * 0.35), escXml(name), nameFs, true));
     if (showArea) el.push(roomLabel(cx, cy + (name ? nameFs * 0.85 : areaFs * 0.35), `${Math.round(rm.area)} sq ft`, areaFs, false));
+  });
+
+  // furniture / fixture objects — footprint rectangle with an upright label
+  (model.objects || []).forEach((o) => {
+    const meta = OBJECTS[o.key] || {};
+    const { wFt, hFt } = objectFootprint(o.size || meta.size || 3, meta.ar || 1);
+    el.push(`<g transform="translate(${r2(o.x)},${r2(o.y)}) rotate(${r2(o.rotation || 0)})"><rect x="${r2(-wFt / 2)}" y="${r2(-hFt / 2)}" width="${r2(wFt)}" height="${r2(hFt)}" rx="0.1" fill="rgba(100,116,139,0.10)" stroke="#64748b" stroke-width="0.05"/></g>`);
+    const fs = Math.min(ptFt(6.5), Math.min(wFt, hFt) * 0.42);
+    el.push(`<text x="${r2(o.x)}" y="${r2(o.y + fs * 0.34)}" font-size="${r2(fs)}" text-anchor="middle" font-family="Poppins, Helvetica, Arial, sans-serif" fill="#475569">${escXml(meta.label || o.key)}</text>`);
   });
 
   // restoration drying equipment tokens (on top of everything)

@@ -2,12 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer, Line, Circle, Text, Group, Rect, Shape } from 'react-konva';
 import { useStore } from '../store.js';
 import {
-  dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, wallPolygons, stairGeometry, snapAngle, detectRooms, roomWalls, roomSignature, parseLength, simplifyPath, EQUIPMENT, FENCE_TYPES,
+  dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, wallPolygons, stairGeometry, snapAngle, detectRooms, roomWalls, roomSignature, parseLength, simplifyPath, EQUIPMENT, FENCE_TYPES, OBJECTS,
 } from '../utils/geometry.js';
 
 const FENCE_THICK = 0.3; // nominal fence body width (ft) for alignment offset
 import { CANVAS_THEME } from '../utils/theme.js';
-import { WallShape, OpeningShape, FenceShape, GateShape, PostShape, DimLabel, WallDimension, WallOpeningDims, LabelShape, StairShape, EquipmentShape } from './canvas/Shapes.jsx';
+import { WallShape, OpeningShape, FenceShape, GateShape, PostShape, DimLabel, WallDimension, WallOpeningDims, LabelShape, StairShape, EquipmentShape, ObjectShape } from './canvas/Shapes.jsx';
 import { IconZoomIn, IconZoomOut, IconFit, IconTrash, IconDuplicate, IconMove } from './Icons.jsx';
 import Compass from './Compass.jsx';
 
@@ -21,7 +21,7 @@ export default function Canvas2D() {
   const layerRef = useRef(null);
 
   const store = useStore();
-  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, posts, labels, stairs, equips, regions, selection, multi, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, roomLabelSize, layers, detachCorner, roomNames, roomLabelPos, roomAffected, equipmentKind } = store;
+  const { tool, scale, grid, snapEnabled, walls, openings, fences, gates, posts, labels, stairs, equips, regions, objects, selection, multi, theme, dimMode, dimOffset, wallJustify, fenceJustify, showRoomAreas, roomLabelSize, layers, detachCorner, roomNames, roomLabelPos, roomAffected, equipmentKind, objectKind } = store;
   // closed wall loops → rooms. Always detected so the interior gets a white
   // floor; the `showRoomAreas` toggle only governs the numeric area label.
   // Each room carries its bounding-wall ids, a stable signature, its name, and
@@ -428,6 +428,7 @@ export default function Canvas2D() {
       if (layers.fences) fences.forEach((f) => { if (inside(f.a) && inside(f.b)) items.push({ type: 'fence', id: f.id }); });
       if (layers.stairs) stairs.forEach((s) => { if (inside({ x: s.x, y: s.y })) items.push({ type: 'stair', id: s.id }); });
       if (layers.equipment) equips.forEach((eq) => { if (inside({ x: eq.x, y: eq.y })) items.push({ type: 'equip', id: eq.id }); });
+      if (layers.objects) objects.forEach((o) => { if (inside({ x: o.x, y: o.y })) items.push({ type: 'object', id: o.id }); });
       regions.forEach((rg) => { const c = rg.points.reduce((a, p) => ({ x: a.x + p.x / rg.points.length, y: a.y + p.y / rg.points.length }), { x: 0, y: 0 }); if (inside(c)) items.push({ type: 'region', id: rg.id }); });
       if (layers.labels) labels.forEach((l) => { if (inside(l.pos)) items.push({ type: 'label', id: l.id }); });
       const merged = m.add ? [...store.multi.filter((a) => !items.some((b) => b.id === a.id)), ...items] : items;
@@ -521,6 +522,10 @@ export default function Canvas2D() {
       // drop a drying component and STAY in the tool (you place many at once)
       const pt = snapEnabled ? snapPt(raw, minorStep) : raw;
       store.addEquip(equipmentKind, pt);
+    } else if (tool === 'object') {
+      // drop a furniture/fixture object (addObject selects it + returns to Select)
+      const pt = snapEnabled ? snapPt(raw, minorStep) : raw;
+      store.addObject(objectKind, pt);
     } else if (tool === 'affected') {
       // toggle the clicked room's water-affected shading
       const inPoly = (pt, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const A = poly[i], B = poly[j]; if (((A.y > pt.y) !== (B.y > pt.y)) && (pt.x < (B.x - A.x) * (pt.y - A.y) / ((B.y - A.y) || 1e-9) + A.x)) c = !c; } return c; };
@@ -790,6 +795,9 @@ export default function Canvas2D() {
     } else if (d.kind === 'equip') {
       const pt = snapEnabled ? snapPt(raw, minorStep) : raw;
       store.updateElement('equip', d.id, { x: pt.x, y: pt.y });
+    } else if (d.kind === 'object') {
+      const pt = snapEnabled ? snapPt(raw, minorStep) : raw;
+      store.updateElement('object', d.id, { x: pt.x, y: pt.y });
     } else if (d.kind === 'stairWidth' || d.kind === 'stairRun' || d.kind === 'stairRotate') {
       const stp = stairs.find((x) => x.id === d.id);
       if (stp) {
@@ -911,6 +919,7 @@ export default function Canvas2D() {
   const selOpening = selection?.type === 'opening' ? openings.find((o) => o.id === selection.id) : null;
   const selGate = selection?.type === 'gate' ? gates.find((g) => g.id === selection.id) : null;
   const selEquip = selection?.type === 'equip' ? equips.find((eq) => eq.id === selection.id) : null;
+  const selObject = selection?.type === 'object' ? objects.find((o) => o.id === selection.id) : null;
   const selRoomData = selection?.type === 'room' ? rooms.find((rm) => rm.sig === selection.id) : null;
 
   // marquee group: set of selected ids + the group bounding box (feet)
@@ -1407,6 +1416,14 @@ export default function Canvas2D() {
               onSelect={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'equip', id: eq.id }); startHandle({ kind: 'equip', id: eq.id })(e); } }} />
           ))}
 
+          {/* furniture / fixture objects */}
+          {layers.objects && objects.map((o) => (
+            <ObjectShape key={o.id} obj={o} scale={scale} zoom={view.k}
+              selected={selection?.id === o.id || multiSet.has(o.id)}
+              hovered={hoverId === o.id} onHover={tool === 'select' ? setHoverId : undefined}
+              onSelect={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'object', id: o.id }); startHandle({ kind: 'object', id: o.id })(e); } }} />
+          ))}
+
           {/* selected region: corner handles to reshape it */}
           {(() => {
             const sr = selection?.type === 'region' ? regions.find((r) => r.id === selection.id) : null;
@@ -1752,6 +1769,35 @@ export default function Canvas2D() {
               <button onMouseDown={stop(() => setRot(deg + 15, true))} aria-label="Rotate right">⟳</button>
             </div>
             <button className="wq-del" onMouseDown={stop(() => store.deleteSelected())} aria-label="Delete equipment"><IconTrash style={{ width: 15, height: 15 }} /></button>
+          </div>
+        );
+      })()}
+
+      {/* selected furniture/fixture object — rotate dial + 90° snap, duplicate, delete */}
+      {selObject && tool === 'select' && (() => {
+        const meta = OBJECTS[selObject.key] || {};
+        const px = view.x + selObject.x * scale * view.k;
+        const py = view.y + selObject.y * scale * view.k;
+        const cx = Math.max(130, Math.min(size.w - 130, px));
+        const cy = Math.max(30, Math.min(size.h - 30, py + (coarse ? 64 : 54)));
+        const deg = Math.round(((selObject.rotation || 0) % 360 + 360) % 360);
+        const setRot = (v, commit) => store.updateElement('object', selObject.id, { rotation: ((Math.round(v) % 360) + 360) % 360 }, commit);
+        const stop = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); fn(); };
+        return (
+          <div className="wall-quick equip-quick" style={{ left: cx, top: cy }} title={meta.label}
+            onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+            <div className="eq-rot" title="Rotate">
+              <button onMouseDown={stop(() => setRot(deg - 90, true))} aria-label="Rotate 90° left">⟲</button>
+              <input type="range" min="0" max="359" value={deg}
+                onChange={(e) => setRot(+e.target.value, false)}
+                onMouseUp={(e) => setRot(+e.target.value, true)}
+                onTouchEnd={(e) => setRot(+e.target.value, true)}
+                onMouseDown={(e) => e.stopPropagation()} />
+              <span className="wq-val">{deg}°</span>
+              <button onMouseDown={stop(() => setRot(deg + 90, true))} aria-label="Rotate 90° right">⟳</button>
+            </div>
+            <button className="wq-dup" onMouseDown={stop(() => store.duplicateElement('object', selObject.id))} aria-label="Duplicate object"><IconDuplicate style={{ width: 15, height: 15 }} /></button>
+            <button className="wq-del" onMouseDown={stop(() => store.deleteSelected())} aria-label="Delete object"><IconTrash style={{ width: 15, height: 15 }} /></button>
           </div>
         );
       })()}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store.js';
 import { Section, PanelHead } from './ui.jsx';
-import { dist, formatFeetInches, parseLength, detectRooms, roomWalls, roomSignature, FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS, STAIR_TYPES, STAIR_TYPE_ORDER, EQUIPMENT } from '../utils/geometry.js';
+import { dist, formatFeetInches, parseLength, detectRooms, roomWalls, roomSignature, FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS, STAIR_TYPES, STAIR_TYPE_ORDER, EQUIPMENT, OBJECTS } from '../utils/geometry.js';
 import { computeQuantities, quantitiesRows } from '../utils/quantities.js';
 import { IconTrash } from './Icons.jsx';
 import FenceGlyph from './FenceGlyph.jsx';
@@ -91,6 +91,7 @@ function SelectedProps() {
   const stairs = useStore((s) => s.stairs);
   const equips = useStore((s) => s.equips);
   const regions = useStore((s) => s.regions);
+  const objects = useStore((s) => s.objects);
   const wallHeightDefault = useStore((s) => s.wallHeight);
   const dimOffsetDefault = useStore((s) => s.dimOffset);
   const wallJustify = useStore((s) => s.wallJustify);
@@ -122,7 +123,7 @@ function SelectedProps() {
     return <RoomProps key={sel.id} sig={sel.id} area={match ? Math.round(match.r.area) : 0} wallCount={multi.length} />;
   }
 
-  const list = { wall: walls, opening: openings, fence: fences, gate: gates, post: posts, label: labels, stair: stairs, equip: equips, region: regions }[sel.type];
+  const list = { wall: walls, opening: openings, fence: fences, gate: gates, post: posts, label: labels, stair: stairs, equip: equips, region: regions, object: objects }[sel.type];
   const el = list.find((e) => e.id === sel.id);
   if (!el) return <p className="empty-note">Selection no longer exists.</p>;
 
@@ -551,6 +552,30 @@ function SelectedProps() {
                 onClick={() => commitSet({ rotation: (((el.rotation || 0) + 15) % 360) })}>15° ⟳</button>
             </div>
             <p className="empty-note">{meta.dir ? 'Direction aims the air-mover airflow arrow.' : 'Direction orients the symbol.'}</p>
+          </>
+        );
+      })()}
+
+      {sel.type === 'object' && (() => {
+        const meta = OBJECTS[el.key] || {};
+        return (
+          <>
+            <p className="empty-note" style={{ marginTop: 0 }}><b>{meta.label || 'Object'}</b> — furniture / fixture. Drag it on the plan to reposition.</p>
+            <div className="field">
+              <label>Rotation — {Math.round(((el.rotation || 0) % 360 + 360) % 360)}°</label>
+              <input type="range" min="0" max="359" step="1" value={Math.round(el.rotation || 0)} style={{ width: '100%' }}
+                onChange={(e) => set({ rotation: parseInt(e.target.value) })}
+                onMouseUp={(e) => commitSet({ rotation: parseInt(e.target.value) })}
+                onTouchEnd={(e) => commitSet({ rotation: parseInt(e.target.value) })} />
+            </div>
+            <div className="row2" style={{ marginTop: 2 }}>
+              <button className="btn ghost" style={{ background: 'var(--slate-bg)', color: 'var(--navy)' }}
+                onClick={() => commitSet({ rotation: (((el.rotation || 0) - 90) % 360 + 360) % 360 })}>⟲ 90°</button>
+              <button className="btn ghost" style={{ background: 'var(--slate-bg)', color: 'var(--navy)' }}
+                onClick={() => commitSet({ rotation: (((el.rotation || 0) + 90) % 360) })}>90° ⟳</button>
+            </div>
+            <Num label="Size (longest side)" suffix="ft" step={0.5} min={0.5} max={40}
+              value={+(el.size || meta.size || 3).toFixed(2)} onChange={(v) => commitSet({ size: Math.max(0.5, v) })} />
           </>
         );
       })()}

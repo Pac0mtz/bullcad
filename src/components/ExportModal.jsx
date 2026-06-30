@@ -51,7 +51,7 @@ export default function ExportModal() {
     try {
       const views3d = include3D && canCapture3D ? capture3DViews() : [];
       await exportPlanPDF(
-        { walls: s.walls, openings: s.openings, fences: s.fences, gates: s.gates, labels: s.labels, stairs: s.stairs, roomNames: s.roomNames, roomLabelPos: s.roomLabelPos, equips: s.equips, roomAffected: s.roomAffected, regions: s.regions },
+        { walls: s.walls, openings: s.openings, fences: s.fences, gates: s.gates, labels: s.labels, stairs: s.stairs, roomNames: s.roomNames, roomLabelPos: s.roomLabelPos, equips: s.equips, roomAffected: s.roomAffected, regions: s.regions, objects: s.objects },
         { title, fileName, paper, orientation, includeLegend, dimMode, dimUnit: dimUnit === 'in' ? 'in' : undefined, dimOffset, wallJustify: s.wallJustify, fenceJustify: s.fenceJustify, showRoomAreas: s.showRoomAreas, roomLabelSize: s.roomLabelSize, views3d, elevations: elevSel },
       );
       setOpen(false);
