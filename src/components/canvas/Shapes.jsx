@@ -286,18 +286,16 @@ export function OpeningShape({ op, wall, scale, selected, hovered, onSelect, onH
           );
         }
         if (style === 'pocket') {
-          // door retracts into a wall pocket on one side. Carve a WHITE cavity into
-          // the wall poché (so it reads on the dark wall) with the door slab dashed
-          // inside it, plus the door's leading edge at the opening.
+          // the door is a thin slab that slides into a wall pocket on one side.
+          // Show the slab parked in the pocket (solid white panel, so it reads on
+          // the dark wall) and a dashed ghost across the opening = closed position.
           const pdir = op.hinge === 'right' ? -1 : 1;
-          const cav = Math.min(th * 0.62, 7);
-          const len = Math.max(w, 10);
-          const x0 = pdir > 0 ? w / 2 : -w / 2 - len;
+          const slabT = Math.max(3, th * 0.42);
+          const px = pdir > 0 ? w / 2 : -w * 1.5; // pocket-side, one door-width into the wall
           return (
             <>
-              <Rect x={x0} y={-cav / 2} width={len} height={cav} fill={palette.opMask} stroke={accent} strokeWidth={1} />
-              <Rect x={x0 + 1.5} y={-cav * 0.17} width={len - 3} height={cav * 0.34} stroke={accent} strokeWidth={1.5} dash={[5, 3]} fillEnabled={false} cornerRadius={0.5} />
-              <Line points={[-pdir * w / 2, -cav / 2, -pdir * w / 2, cav / 2]} stroke={accent} strokeWidth={2.5} />
+              <Rect x={px} y={-slabT / 2} width={w} height={slabT} fill={palette.opMask} stroke={accent} strokeWidth={1.5} cornerRadius={1} />
+              <Rect x={-w / 2} y={-slabT / 2} width={w} height={slabT} stroke={accent} strokeWidth={1} dash={[4, 3]} fillEnabled={false} cornerRadius={1} />
             </>
           );
         }
