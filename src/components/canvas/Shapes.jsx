@@ -262,14 +262,43 @@ export function OpeningShape({ op, wall, scale, selected, hovered, onSelect, onH
       <Line points={[w / 2, -th / 2, w / 2, th / 2]} stroke={accent} strokeWidth={2} />
 
       {op.type === 'door' && (() => {
-        const { d, hx, rotation } = swingGeom(w, leafInwardSign(a, b, centroid), op.hinge, op.swing);
-        return (
-          <>
-            <Line points={[hx, 0, hx, d * w]} stroke={accent} strokeWidth={2} />
-            <Arc x={hx} y={0} innerRadius={w} outerRadius={w} angle={90} rotation={rotation}
+        const style = op.style || 'single';
+        const inward = leafInwardSign(a, b, centroid);
+        // a single swing leaf (length leafW) hinged per swingGeom `sg`, shifted x0
+        const leaf = (sg, x0, leafW, key) => (
+          <Group x={x0} key={key}>
+            <Line points={[sg.hx, 0, sg.hx, sg.d * leafW]} stroke={accent} strokeWidth={2} />
+            <Arc x={sg.hx} y={0} innerRadius={leafW} outerRadius={leafW} angle={90} rotation={sg.rotation}
               stroke={accent} strokeWidth={1.5} dash={[5, 4]} />
-          </>
+          </Group>
         );
+        if (style === 'double') {
+          const half = w / 2;
+          return <>{leaf(swingGeom(half, inward, 'left', op.swing), -w / 4, half, 'l')}{leaf(swingGeom(half, inward, 'right', op.swing), w / 4, half, 'r')}</>;
+        }
+        if (style === 'sliding') {
+          const off = Math.max(2, th * 0.18);
+          return (
+            <>
+              <Line points={[-w / 2, -off, w * 0.12, -off]} stroke={accent} strokeWidth={3} lineCap="round" />
+              <Line points={[-w * 0.12, off, w / 2, off]} stroke={accent} strokeWidth={3} lineCap="round" />
+            </>
+          );
+        }
+        if (style === 'pocket') {
+          return (
+            <>
+              <Line points={[-w / 2, 0, w / 2, 0]} stroke={accent} strokeWidth={2.5} lineCap="round" />
+              <Line points={[w / 2, 0, w * 1.4, 0]} stroke={accent} strokeWidth={1.5} dash={[5, 4]} />
+            </>
+          );
+        }
+        if (style === 'bifold') {
+          const d = (op.swing === 'out' ? -1 : 1) * inward;
+          const peak = w * 0.2 * d;
+          return <Line points={[-w / 2, 0, -w / 4, peak, 0, 0, w / 4, peak, w / 2, 0]} stroke={accent} strokeWidth={2} lineJoin="round" />;
+        }
+        return leaf(swingGeom(w, inward, op.hinge, op.swing), 0, w, 's'); // single
       })()}
       {op.type === 'window' && proj === 'bay' && (
         // projecting trapezoid (plan view of a bay)

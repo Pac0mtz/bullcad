@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store.js';
 import { Section, PanelHead } from './ui.jsx';
-import { FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS, EQUIPMENT, EQUIPMENT_ORDER, OBJECTS, OBJECT_ORDER, OBJECT_CATS } from '../utils/geometry.js';
+import { FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, DOOR_STYLES, DOOR_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS, EQUIPMENT, EQUIPMENT_ORDER, OBJECTS, OBJECT_ORDER, OBJECT_CATS } from '../utils/geometry.js';
 import { IconFan, IconDehu, IconScrubber, IconHeater, IconDroplet } from './Icons.jsx';
 import FenceElevation from './FenceElevation.jsx';
 
@@ -115,7 +115,18 @@ export default function LeftPanel({ onCollapse }) {
             <p className="empty-note">Click on a wall to place. Size follows the chosen style; tweak it in Properties after placing.</p>
           </div>
         )}
-        {(tool === 'door' || tool === 'opening') && (
+        {tool === 'door' && (
+          <div style={{ marginTop: 12 }}>
+            <div className="field">
+              <label>Door style</label>
+              <select value={s.doorStyle} onChange={(e) => setDefault('doorStyle', e.target.value)}>
+                {DOOR_STYLE_ORDER.map((k) => <option key={k} value={k}>{DOOR_STYLES[k].label}</option>)}
+              </select>
+            </div>
+            <p className="empty-note">Click on a wall to place. Width follows the style; tweak it in Properties. Single & double swing; sliding, pocket, and bifold slide/fold.</p>
+          </div>
+        )}
+        {tool === 'opening' && (
           <div style={{ marginTop: 12 }}>
             <Num label="Component width" suffix="ft" step={0.5} min={1}
               value={s.openingWidth} onChange={(v) => setDefault('openingWidth', v)} />

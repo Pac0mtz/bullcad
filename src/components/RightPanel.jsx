@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store.js';
 import { Section, PanelHead } from './ui.jsx';
-import { dist, formatFeetInches, parseLength, detectRooms, roomWalls, roomSignature, FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS, STAIR_TYPES, STAIR_TYPE_ORDER, EQUIPMENT, OBJECTS } from '../utils/geometry.js';
+import { dist, formatFeetInches, parseLength, detectRooms, roomWalls, roomSignature, FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, DOOR_STYLES, DOOR_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS, STAIR_TYPES, STAIR_TYPE_ORDER, EQUIPMENT, OBJECTS } from '../utils/geometry.js';
 import { computeQuantities, quantitiesRows } from '../utils/quantities.js';
 import { IconTrash } from './Icons.jsx';
 import FenceGlyph from './FenceGlyph.jsx';
@@ -252,22 +252,30 @@ function SelectedProps() {
           <Num label="Height" suffix="ft" step={0.25} min={1}
             value={el.height} onChange={(v) => commitSet({ height: v })} />
           {el.type === 'door' && (
-            <div className="row2">
-              <div className="field" style={{ marginBottom: 0 }}>
-                <label>Hinge</label>
-                <select value={el.hinge || 'left'} onChange={(e) => commitSet({ hinge: e.target.value })}>
-                  <option value="left">Left</option>
-                  <option value="right">Right</option>
+            <>
+              <div className="field">
+                <label>Door style</label>
+                <select value={el.style || 'single'} onChange={(e) => commitSet({ style: e.target.value })}>
+                  {DOOR_STYLE_ORDER.map((k) => <option key={k} value={k}>{DOOR_STYLES[k].label}</option>)}
                 </select>
               </div>
-              <div className="field" style={{ marginBottom: 0 }}>
-                <label>Swing</label>
-                <select value={el.swing || 'in'} onChange={(e) => commitSet({ swing: e.target.value })}>
-                  <option value="in">Inward</option>
-                  <option value="out">Outward</option>
-                </select>
+              <div className="row2">
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>Hinge</label>
+                  <select value={el.hinge || 'left'} onChange={(e) => commitSet({ hinge: e.target.value })}>
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
+                  </select>
+                </div>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>Swing</label>
+                  <select value={el.swing || 'in'} onChange={(e) => commitSet({ swing: e.target.value })}>
+                    <option value="in">Inward</option>
+                    <option value="out">Outward</option>
+                  </select>
+                </div>
               </div>
-            </div>
+            </>
           )}
           {el.type === 'window' && (
             <>

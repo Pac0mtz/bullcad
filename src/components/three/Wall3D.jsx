@@ -143,39 +143,56 @@ function Garden3D({ o, outward, selected, onSelect }) {
   );
 }
 
-// Door: casing frame + a slightly-inset leaf with a handle.
+// Door: casing frame + style-specific leaf/leaves (single/double swing, sliding,
+// pocket, bifold) with a handle on hinged styles.
 function Door3D({ o, th, selected, onSelect }) {
   const w = o.width;
   const h = o.height;
   const fr = 0.25;
+  const style = o.style || 'single';
   const leafW = w - fr * 1.4;
   const leafH = h - fr * 0.7;
   const fc = selected ? HILITE : FRAME;
   const em = selected ? HILITE : undefined;
+  const dc = selected ? '#9db7d8' : DOOR;
+  const leafD = Math.min(0.18, th * 0.6);
   const click = (e) => { e.stopPropagation(); onSelect?.(o.id); };
+  const panel = (px, pw, z, key) => (
+    <Box key={key} x={px} y={leafH / 2} w={pw} h={leafH} depth={leafD} z={z} color={dc} emissive={em} roughness={0.7} />
+  );
+  const handle = (lx, key) => {
+    const dir = lx >= 0 ? -1 : 1, hz = leafD + 0.12;
+    return (
+      <group key={key}>
+        <Box x={lx} y={leafH * 0.46} w={0.12} h={0.12} depth={hz} color={HANDLE} roughness={0.22} metalness={0.85} />
+        <Box x={lx + dir * 0.11} y={leafH * 0.46} w={0.22} h={0.055} depth={hz + 0.05} color={HANDLE} roughness={0.22} metalness={0.85} />
+      </group>
+    );
+  };
   return (
     <group position={[o.c, 0, 0]} onClick={click}>
       {/* casing */}
       <Box x={0} y={h - fr / 2} w={w} h={fr} depth={th + 0.04} color={fc} emissive={em} roughness={0.6} />
       <Box x={-(w - fr) / 2} y={h / 2} w={fr} h={h} depth={th + 0.04} color={fc} emissive={em} roughness={0.6} />
       <Box x={(w - fr) / 2} y={h / 2} w={fr} h={h} depth={th + 0.04} color={fc} emissive={em} roughness={0.6} />
-      {/* leaf, recessed inside the casing */}
-      <Box x={0} y={leafH / 2} w={leafW} h={leafH} depth={Math.min(0.18, th * 0.6)} color={selected ? '#9db7d8' : DOOR} emissive={em} roughness={0.7} />
-      {/* recessed panel detail */}
-      <Box x={0} y={leafH * 0.66} w={leafW * 0.62} h={leafH * 0.28} depth={Math.min(0.2, th * 0.7)} color="#7f8ea3" roughness={0.7} />
-      <Box x={0} y={leafH * 0.28} w={leafW * 0.62} h={leafH * 0.32} depth={Math.min(0.2, th * 0.7)} color="#7f8ea3" roughness={0.7} />
-      {/* lever handle + rosette on the latch side (opposite the hinge) */}
-      {(() => {
-        const lx = (o.hinge || 'left') === 'left' ? leafW * 0.40 : -leafW * 0.40;
-        const dir = (o.hinge || 'left') === 'left' ? -1 : 1; // lever points toward the hinge
-        const hz = Math.min(0.18, th * 0.6) + 0.12;
-        return (
-          <>
-            <Box x={lx} y={leafH * 0.46} w={0.12} h={0.12} depth={hz} color={HANDLE} roughness={0.22} metalness={0.85} />
-            <Box x={lx + dir * 0.11} y={leafH * 0.46} w={0.22} h={0.055} depth={hz + 0.05} color={HANDLE} roughness={0.22} metalness={0.85} />
-          </>
-        );
-      })()}
+
+      {style === 'single' && (<>
+        {panel(0, leafW, 0, 's')}
+        <Box x={0} y={leafH * 0.66} w={leafW * 0.62} h={leafH * 0.28} depth={leafD + 0.02} color="#7f8ea3" roughness={0.7} />
+        <Box x={0} y={leafH * 0.28} w={leafW * 0.62} h={leafH * 0.32} depth={leafD + 0.02} color="#7f8ea3" roughness={0.7} />
+        {handle((o.hinge || 'left') === 'left' ? leafW * 0.40 : -leafW * 0.40, 'h')}
+      </>)}
+      {style === 'double' && (<>
+        {panel(-(w / 4), leafW / 2 - 0.03, 0, 'l')}
+        {panel(w / 4, leafW / 2 - 0.03, 0, 'r')}
+        {handle(-0.12, 'hl')}{handle(0.12, 'hr')}
+      </>)}
+      {style === 'sliding' && (<>
+        {panel(-w * 0.24, leafW / 2, leafD * 0.7, 'a')}
+        {panel(w * 0.24, leafW / 2, -leafD * 0.7, 'b')}
+      </>)}
+      {style === 'pocket' && panel(0, leafW, 0, 'p')}
+      {style === 'bifold' && [0, 1, 2, 3].map((i) => panel(-leafW / 2 + leafW / 8 + i * (leafW / 4), leafW / 4 - 0.03, (i % 2 ? 1 : -1) * leafD * 0.5, 'b' + i))}
     </group>
   );
 }

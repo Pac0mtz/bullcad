@@ -154,9 +154,29 @@ export function buildPlanSvg(model, opts = {}) {
     inner += `<line x1="${r2(-hw)}" y1="${r2(-th / 2)}" x2="${r2(-hw)}" y2="${r2(th / 2)}" stroke="${NAVY}" stroke-width="0.06"/>`;
     inner += `<line x1="${r2(hw)}" y1="${r2(-th / 2)}" x2="${r2(hw)}" y2="${r2(th / 2)}" stroke="${NAVY}" stroke-width="0.06"/>`;
     if (o.type === 'door') {
-      const { d, hx, farX, sweep } = swingGeom(hw, inwardSign(s.a, s.b, centroid), o.hinge, o.swing);
-      inner += `<line x1="${r2(hx)}" y1="0" x2="${r2(hx)}" y2="${r2(d * o.width)}" stroke="${NAVY}" stroke-width="0.06"/>`;
-      inner += `<path d="M ${r2(hx)} ${r2(d * o.width)} A ${r2(o.width)} ${r2(o.width)} 0 0 ${sweep} ${r2(farX)} 0" fill="none" stroke="${NAVY}" stroke-width="0.05" stroke-dasharray="0.3 0.22"/>`;
+      const style = o.style || 'single';
+      const inward = inwardSign(s.a, s.b, centroid);
+      const dd = (o.swing === 'out' ? -1 : 1) * inward;
+      if (style === 'double') {
+        inner += `<line x1="${r2(-hw)}" y1="0" x2="${r2(-hw)}" y2="${r2(dd * hw)}" stroke="${NAVY}" stroke-width="0.06"/>`;
+        inner += `<path d="M ${r2(-hw)} ${r2(dd * hw)} A ${r2(hw)} ${r2(hw)} 0 0 ${dd === -1 ? 1 : 0} 0 0" fill="none" stroke="${NAVY}" stroke-width="0.05" stroke-dasharray="0.3 0.22"/>`;
+        inner += `<line x1="${r2(hw)}" y1="0" x2="${r2(hw)}" y2="${r2(dd * hw)}" stroke="${NAVY}" stroke-width="0.06"/>`;
+        inner += `<path d="M ${r2(hw)} ${r2(dd * hw)} A ${r2(hw)} ${r2(hw)} 0 0 ${dd === -1 ? 0 : 1} 0 0" fill="none" stroke="${NAVY}" stroke-width="0.05" stroke-dasharray="0.3 0.22"/>`;
+      } else if (style === 'sliding') {
+        const off = th * 0.16;
+        inner += `<line x1="${r2(-hw)}" y1="${r2(-off)}" x2="${r2(o.width * 0.06)}" y2="${r2(-off)}" stroke="${NAVY}" stroke-width="0.12" stroke-linecap="round"/>`;
+        inner += `<line x1="${r2(-o.width * 0.06)}" y1="${r2(off)}" x2="${r2(hw)}" y2="${r2(off)}" stroke="${NAVY}" stroke-width="0.12" stroke-linecap="round"/>`;
+      } else if (style === 'pocket') {
+        inner += `<line x1="${r2(-hw)}" y1="0" x2="${r2(hw)}" y2="0" stroke="${NAVY}" stroke-width="0.1" stroke-linecap="round"/>`;
+        inner += `<line x1="${r2(hw)}" y1="0" x2="${r2(hw + o.width * 0.9)}" y2="0" stroke="${NAVY}" stroke-width="0.05" stroke-dasharray="0.3 0.22"/>`;
+      } else if (style === 'bifold') {
+        const peak = o.width * 0.2 * dd;
+        inner += `<polyline points="${r2(-hw)},0 ${r2(-hw / 2)},${r2(peak)} 0,0 ${r2(hw / 2)},${r2(peak)} ${r2(hw)},0" fill="none" stroke="${NAVY}" stroke-width="0.06"/>`;
+      } else {
+        const { d, hx, farX, sweep } = swingGeom(hw, inward, o.hinge, o.swing);
+        inner += `<line x1="${r2(hx)}" y1="0" x2="${r2(hx)}" y2="${r2(d * o.width)}" stroke="${NAVY}" stroke-width="0.06"/>`;
+        inner += `<path d="M ${r2(hx)} ${r2(d * o.width)} A ${r2(o.width)} ${r2(o.width)} 0 0 ${sweep} ${r2(farX)} 0" fill="none" stroke="${NAVY}" stroke-width="0.05" stroke-dasharray="0.3 0.22"/>`;
+      }
     } else if (proj) {
       const d = (WINDOW_STYLES[o.style].depth || 1.5) * outwardSign(w);
       if (proj === 'bay') inner += `<polygon points="${r2(-hw)},0 ${r2(-hw / 2)},${r2(d)} ${r2(hw / 2)},${r2(d)} ${r2(hw)},0" fill="none" stroke="${NAVY}" stroke-width="0.06"/>`;

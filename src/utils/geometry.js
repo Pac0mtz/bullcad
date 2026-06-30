@@ -187,6 +187,17 @@ export const GATE_TYPES = {
 };
 export const GATE_TYPE_ORDER = ['swing', 'double', 'sliding'];
 
+// Door styles — drawn as distinct symbols in 2D/3D/PDF. `swing` doors draw a
+// leaf + arc; the rest slide/fold. `w`/`h` are placement defaults (feet).
+export const DOOR_STYLES = {
+  single:  { label: 'Single',  w: 3, h: 6.6667, leaves: 1, swing: true },
+  double:  { label: 'Double',  w: 5, h: 6.6667, leaves: 2, swing: true },
+  sliding: { label: 'Sliding', w: 6, h: 6.6667, leaves: 2, swing: false },
+  pocket:  { label: 'Pocket',  w: 3, h: 6.6667, leaves: 1, swing: false },
+  bifold:  { label: 'Bifold',  w: 4, h: 6.6667, leaves: 4, swing: false },
+};
+export const DOOR_STYLE_ORDER = ['single', 'double', 'sliding', 'pocket', 'bifold'];
+
 export const OPENING_DEFAULTS = {
   // most-common US standards: 3'0" × 6'8" door, 3'0" × 4'0" window (sill 3'0")
   door: { width: 3, height: 6.6667, label: 'Door' },
@@ -572,13 +583,6 @@ export const OBJECTS = {
   washer:       { label: 'Washer',       size: 2.3, ar: 1,     cat: 'Laundry' },
   dryer:        { label: 'Dryer',        size: 2.3, ar: 1,     cat: 'Laundry' },
   washerDryer:  { label: 'Washer/Dryer', size: 4.6, ar: 1,     cat: 'Laundry' },
-  // Doors & windows (drawable furniture-style symbols)
-  singleDoor:   { label: 'Single door',  size: 3,   ar: 1,     cat: 'Doors' },
-  doubleDoor:   { label: 'Double door',  size: 5,   ar: 0.5,   cat: 'Doors' },
-  bifoldDoor:   { label: 'Bifold door',  size: 3,   ar: 0.3,   cat: 'Doors' },
-  pocketDoor:   { label: 'Pocket door',  size: 3,   ar: 0.1,   cat: 'Doors' },
-  slidingDoor:  { label: 'Sliding door', size: 6,   ar: 0.1,   cat: 'Doors' },
-  window:       { label: 'Window',       size: 3,   ar: 0.1,   cat: 'Doors' },
 };
 export const OBJECT_ORDER = [
   'refrigerator', 'oven', 'cookTop', 'dishwasher', 'sink', 'doubleSink', 'counterMiddle', 'counterCorner', 'counterEnd',
@@ -586,9 +590,8 @@ export const OBJECT_ORDER = [
   'queenBed', 'twinBed',
   'sofa', 'loveSeat', 'chair', 'coffeeTable', 'endTable', 'tableRect', 'tableRound',
   'washer', 'dryer', 'washerDryer',
-  'singleDoor', 'doubleDoor', 'bifoldDoor', 'pocketDoor', 'slidingDoor', 'window',
 ];
-export const OBJECT_CATS = ['Kitchen', 'Bath', 'Bedroom', 'Living', 'Laundry', 'Doors'];
+export const OBJECT_CATS = ['Kitchen', 'Bath', 'Bedroom', 'Living', 'Laundry'];
 // the PNG url + rendered footprint (feet) for a placed object, given its loaded
 // aspect ratio (h/w). The longest side = `size`; the short side follows aspect.
 export const objectFootprint = (size, aspect) => (aspect >= 1

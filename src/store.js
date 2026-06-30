@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { uid, FENCE_TYPES, OPENING_DEFAULTS, WINDOW_STYLES, EQUIPMENT, planarizeWalls, detectRooms, roomWalls, roomSignature, dist } from './utils/geometry.js';
+import { uid, FENCE_TYPES, OPENING_DEFAULTS, WINDOW_STYLES, DOOR_STYLES, EQUIPMENT, planarizeWalls, detectRooms, roomWalls, roomSignature, dist } from './utils/geometry.js';
 
 // Planarize `walls`/`openings` against the current state `s` and return a commit
 // patch that also migrates room names/label positions (keyed by room signature)
@@ -148,6 +148,7 @@ export const useStore = create((set, get) => ({
   gateStyle: 'swing',
   openingWidth: 3,
   windowStyle: 'slider', // default style for newly placed windows
+  doorStyle: 'single',   // default style for newly placed doors
   windowGrid: false,     // colonial grille overlay
   gateWidth: 4,
 
@@ -302,6 +303,10 @@ export const useStore = create((set, get) => ({
         // windows take their proportions from the chosen style
         const st = WINDOW_STYLES[s.windowStyle] || WINDOW_STYLES.slider;
         op = { id, wallId, type, t, width: st.w, height: st.h, sill: st.sill, style: s.windowStyle, grid: s.windowGrid };
+      } else if (type === 'door') {
+        // doors take their width from the chosen door style (single/double/sliding/…)
+        const st = DOOR_STYLES[s.doorStyle] || DOOR_STYLES.single;
+        op = { id, wallId, type, t, width: st.w, height: st.h, style: s.doorStyle };
       } else {
         op = { id, wallId, type, t, width: s.openingWidth || def.width, height: def.height, ...(def.sill ? { sill: def.sill } : {}) };
       }
