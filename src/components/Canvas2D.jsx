@@ -77,14 +77,13 @@ export default function Canvas2D() {
   const sizeRef = useRef(size); sizeRef.current = size;
   const scaleRef = useRef(scale); scaleRef.current = scale;
 
-  // Adaptive grid: subdivide the 1-ft grid into 6"/3"/1" cells as you zoom in, so
-  // the grid (and snapping) work at inch precision. `minorStep` is in feet.
+  // Snap grid: foot-by-foot when zoomed out, then inch-by-inch once a foot cell is
+  // big enough on screen to place inches comfortably — no in-between 3"/6" steps,
+  // so walls (and everything) land on whole inches or whole feet. `minorStep` ft.
   const pxPerCell = scale * view.k * grid;
   const minorStep =
-    pxPerCell >= 110 ? grid / 12 : // 1 in  (grid = 1 ft)
-    pxPerCell >= 48 ? grid / 4 :   // 3 in
-    pxPerCell >= 24 ? grid / 2 :   // 6 in
-    grid;                          // 1 ft
+    pxPerCell >= 48 ? grid / 12 : // 1 in  (zoomed in)
+    grid;                         // 1 ft  (zoomed out)
   const stepLabel = minorStep >= 1 ? `${minorStep} ft` : `${Math.round(minorStep * 12)} in`;
 
   // ---- size to container ----
@@ -773,7 +772,12 @@ export default function Canvas2D() {
         const ux = (host.b.x - host.a.x) / L, uy = (host.b.y - host.a.y) / L;
         let half = Math.abs((raw.x - d.center.x) * ux + (raw.y - d.center.y) * uy);
         let width = Math.max(0.5, Math.min(L, half * 2));
-        if (snapEnabled) { const Q = 1 / 48; width = Math.round(width / Q) * Q; } // 1/4 inch
+        if (snapEnabled) {
+          // windows snap to 1/2" (no finer); doors/gates to 1/4"
+          const isWindow = type === 'opening' && openings.find((o) => o.id === d.id)?.type === 'window';
+          const Q = isWindow ? 1 / 24 : 1 / 48;
+          width = Math.round(width / Q) * Q;
+        }
         store.updateElement(type, d.id, { width });
       }
     } else if (d.kind === 'stair') {
