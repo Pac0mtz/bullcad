@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store.js';
 import { Section, PanelHead } from './ui.jsx';
-import { dist, formatFeetInches, parseLength, detectRooms, roomWalls, roomSignature, FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, DOOR_STYLES, DOOR_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS, STAIR_TYPES, STAIR_TYPE_ORDER, EQUIPMENT, OBJECTS } from '../utils/geometry.js';
+import { dist, formatFeetInches, parseLength, detectRooms, roomWalls, roomSignature, FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, DOOR_STYLES, DOOR_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, POST_CAPS, POST_CAP_ORDER, SLAT_COLORS, STAIR_TYPES, STAIR_TYPE_ORDER, EQUIPMENT, OBJECTS, REGION_COLORS } from '../utils/geometry.js';
 import { computeQuantities, quantitiesRows } from '../utils/quantities.js';
 import { IconTrash } from './Icons.jsx';
 import FenceGlyph from './FenceGlyph.jsx';
@@ -336,6 +336,14 @@ function SelectedProps() {
               </select>
             </div>
           )}
+          {FENCE_TYPES[el.fenceType]?.style !== 'mesh' && (
+            <div className="field">
+              <label>Post cap <span className="muted">(3D)</span></label>
+              <select value={el.postCap || 'flat'} onChange={(e) => commitSet({ postCap: e.target.value })}>
+                {POST_CAP_ORDER.map((k) => <option key={k} value={k}>{POST_CAPS[k].label}</option>)}
+              </select>
+            </div>
+          )}
           <div className="row2">
             <Num label="Height" suffix="ft" step={0.5} min={2}
               value={el.height} onChange={(v) => commitSet({ height: v })} />
@@ -598,6 +606,16 @@ function SelectedProps() {
               <option value={2}>Category 2 — grey water</option>
               <option value={3}>Category 3 — black water</option>
             </select>
+          </div>
+          <div className="field">
+            <label>Color</label>
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+              {REGION_COLORS.map((c) => (
+                <button key={c} title={c} onClick={() => commitSet({ color: c })}
+                  style={{ width: 24, height: 24, borderRadius: 6, background: c, cursor: 'pointer',
+                    border: (el.color || '#f59e0b') === c ? '2px solid var(--navy)' : '1px solid var(--slate-200)' }} />
+              ))}
+            </div>
           </div>
         </>
       )}

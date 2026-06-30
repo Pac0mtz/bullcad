@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store.js';
 import { Section, PanelHead } from './ui.jsx';
-import { FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, DOOR_STYLES, DOOR_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, SLAT_COLORS, EQUIPMENT, EQUIPMENT_ORDER, OBJECTS, OBJECT_ORDER, OBJECT_CATS } from '../utils/geometry.js';
+import { FENCE_TYPES, WALL_PRESETS, WALL_COLORS, WALL_MATERIALS, WALL_MATERIAL_ORDER, WINDOW_STYLES, WINDOW_STYLE_ORDER, DOOR_STYLES, DOOR_STYLE_ORDER, GATE_TYPES, GATE_TYPE_ORDER, PICKET_CAPS, PICKET_CAP_ORDER, POST_CAPS, POST_CAP_ORDER, SLAT_COLORS, EQUIPMENT, EQUIPMENT_ORDER, OBJECTS, OBJECT_ORDER, OBJECT_CATS } from '../utils/geometry.js';
 import { IconFan, IconDehu, IconScrubber, IconHeater, IconDroplet } from './Icons.jsx';
 import FenceElevation from './FenceElevation.jsx';
 
@@ -283,6 +283,14 @@ export default function LeftPanel({ onCollapse }) {
                 <label>Picket top</label>
                 <select value={s.picketCap} onChange={(e) => setDefault('picketCap', e.target.value)}>
                   {PICKET_CAP_ORDER.map((k) => <option key={k} value={k}>{PICKET_CAPS[k].label}</option>)}
+                </select>
+              </div>
+            )}
+            {FENCE_TYPES[s.fenceType]?.style !== 'mesh' && (
+              <div className="field" style={{ marginTop: 12, marginBottom: 0 }}>
+                <label>Post cap <span className="muted">(3D)</span></label>
+                <select value={s.postCap} onChange={(e) => setDefault('postCap', e.target.value)}>
+                  {POST_CAP_ORDER.map((k) => <option key={k} value={k}>{POST_CAPS[k].label}</option>)}
                 </select>
               </div>
             )}

@@ -154,6 +154,18 @@ export const PICKET_CAPS = {
 };
 export const PICKET_CAP_ORDER = ['dogear', 'gothic', 'french', 'point', 'flat'];
 
+// Decorative post-top caps for wood / picket / vinyl posts (rendered in 3D on the
+// square posts; chain-link keeps its galvanized dome).
+export const POST_CAPS = {
+  flat:    { label: 'Flat' },
+  bevel:   { label: 'Beveled' },
+  pyramid: { label: 'Pyramid' },
+  ball:    { label: 'Ball' },
+  gothic:  { label: 'Gothic Point' },
+  acorn:   { label: 'Acorn' },
+};
+export const POST_CAP_ORDER = ['flat', 'bevel', 'pyramid', 'ball', 'gothic', 'acorn'];
+
 // Front silhouette of a single picket, centered on x=0, base at y=0, tip at y=h,
 // returned as [x,y] points (closed loop). `cap` shapes the top.
 export function picketOutline(cap, w, h) {
@@ -547,6 +559,14 @@ export const EQUIPMENT = {
   sensor:      { code: 'M',  label: 'Moisture point',   color: '#9333ea' },
 };
 export const EQUIPMENT_ORDER = ['airMover', 'dehu', 'airScrubber', 'heater', 'sensor'];
+
+// Colors for affected (wet-area) regions — mark different areas / categories.
+export const REGION_COLORS = ['#f59e0b', '#2563eb', '#059669', '#dc2626', '#7c3aed', '#0891b2', '#db2777'];
+// hex → rgba() string at alpha `a`
+export const rgba = (hex, a = 1) => {
+  const m = (hex || '').match(/#(..)(..)(..)/);
+  return m ? `rgba(${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)},${a})` : hex;
+};
 
 // ----- Furniture / fixture objects (PNGs in /public/objects) -----
 // `size` = longest side in feet (the short side follows the image's aspect ratio

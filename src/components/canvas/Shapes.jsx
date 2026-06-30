@@ -16,7 +16,7 @@ function useObjectImage(key) {
 }
 
 // A placed furniture/fixture object: a rotatable PNG sized to its footprint.
-export function ObjectShape({ obj, scale, zoom = 1, selected, hovered, onHover, onSelect }) {
+export function ObjectShape({ obj, scale, zoom = 1, selected, hovered, onHover, onSelect, dark = false }) {
   const meta = OBJECTS[obj.key] || {};
   const img = useObjectImage(obj.key);
   const aspect = img ? img.height / img.width : (meta.ar || 1);
@@ -28,6 +28,8 @@ export function ObjectShape({ obj, scale, zoom = 1, selected, hovered, onHover, 
       onMouseDown={down} onTouchStart={down}
       onMouseEnter={onHover ? () => onHover(obj.id) : undefined}
       onMouseLeave={onHover ? () => onHover(null) : undefined}>
+      {/* dark mode: a light card behind the dark-line PNG so it stays legible */}
+      {dark && img && <Rect x={-w / 2 - 1} y={-h / 2 - 1} width={w + 2} height={h + 2} fill="#e7ecf3" cornerRadius={2} opacity={0.92} listening={false} />}
       {img
         ? <KImage image={img} x={-w / 2} y={-h / 2} width={w} height={h} />
         : <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill="#e2e8f0" stroke="#94a3b8" strokeWidth={1} cornerRadius={2} />}

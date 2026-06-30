@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer, Line, Circle, Text, Group, Rect, Shape } from 'react-konva';
 import { useStore } from '../store.js';
 import {
-  dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, wallPolygons, stairGeometry, snapAngle, detectRooms, roomWalls, roomSignature, parseLength, simplifyPath, EQUIPMENT, FENCE_TYPES, OBJECTS, objectFootprint, DOOR_STYLES, WINDOW_STYLES,
+  dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, wallPolygons, stairGeometry, snapAngle, detectRooms, roomWalls, roomSignature, parseLength, simplifyPath, EQUIPMENT, FENCE_TYPES, OBJECTS, objectFootprint, DOOR_STYLES, WINDOW_STYLES, rgba,
 } from '../utils/geometry.js';
 
 const FENCE_THICK = 0.3; // nominal fence body width (ft) for alignment offset
@@ -1112,9 +1112,10 @@ export default function Canvas2D() {
               const raw = getFeet();
               drag.current = { kind: 'group', items: [{ type: 'region', id: rg.id }], last: raw ? (snapEnabled ? snapPt(raw, minorStep) : raw) : { x: 0, y: 0 }, moved: false, before: useStore.getState().snapshotGeom() };
             };
+            const rc = rg.color || '#f59e0b';
             return (
-              <Line key={rg.id} points={pts} closed fill="rgba(245,158,11,0.28)"
-                stroke={sel ? '#b45309' : 'rgba(180,83,9,0.55)'} strokeWidth={(sel ? 1.8 : 1) / view.k} hitStrokeWidth={6 / view.k}
+              <Line key={rg.id} points={pts} closed fill={rgba(rc, 0.28)}
+                stroke={sel ? rc : rgba(rc, 0.7)} strokeWidth={(sel ? 1.8 : 1) / view.k} hitStrokeWidth={6 / view.k}
                 onMouseDown={startMove} onTouchStart={startMove} />
             );
           })}
@@ -1461,7 +1462,7 @@ export default function Canvas2D() {
 
           {/* furniture / fixture objects */}
           {layers.objects && objects.map((o) => (
-            <ObjectShape key={o.id} obj={o} scale={scale} zoom={view.k}
+            <ObjectShape key={o.id} obj={o} scale={scale} zoom={view.k} dark={theme === 'dark'}
               selected={selection?.id === o.id || multiSet.has(o.id)}
               hovered={hoverId === o.id} onHover={tool === 'select' ? setHoverId : undefined}
               onSelect={(e) => { e.cancelBubble = true; if (tool === 'select') { store.select({ type: 'object', id: o.id }); startHandle({ kind: 'object', id: o.id })(e); } }} />

@@ -86,6 +86,25 @@ function Picket({ x, w, h, cap = 'dogear', color, metal = false, depth = 0.07, s
   );
 }
 
+// Decorative cap on top of a square post. `top` is the post's top Y, `size` the
+// post width. flat/bevel/pyramid/ball/gothic/acorn.
+function PostCap({ cap = 'flat', top, size: s, color }) {
+  const mat = <meshStandardMaterial color={color} roughness={cap === 'ball' || cap === 'acorn' ? 0.5 : 0.7} metalness={cap === 'ball' ? 0.1 : 0} />;
+  const r = s * 0.62;
+  if (cap === 'bevel') return <mesh position={[0, top + s * 0.18, 0]} castShadow><cylinderGeometry args={[s * 0.34, s * 0.7, s * 0.36, 4]} />{mat}</mesh>;
+  if (cap === 'pyramid') return <mesh position={[0, top + s * 0.3, 0]} rotation={[0, Math.PI / 4, 0]} castShadow><coneGeometry args={[s * 0.72, s * 0.6, 4]} />{mat}</mesh>;
+  if (cap === 'ball') return <mesh position={[0, top + r, 0]} castShadow><sphereGeometry args={[r, 16, 12]} />{mat}</mesh>;
+  if (cap === 'gothic') return <mesh position={[0, top + s * 0.55, 0]} rotation={[0, Math.PI / 4, 0]} castShadow><coneGeometry args={[s * 0.6, s * 1.1, 4]} />{mat}</mesh>;
+  if (cap === 'acorn') return (
+    <group position={[0, top, 0]}>
+      <mesh position={[0, r * 0.85, 0]} castShadow><sphereGeometry args={[r, 16, 12]} />{mat}</mesh>
+      <mesh position={[0, r * 1.7, 0]} castShadow><coneGeometry args={[r * 0.5, r * 0.8, 12]} />{mat}</mesh>
+    </group>
+  );
+  // flat (default): a thin cap board slightly wider than the post
+  return <mesh position={[0, top + 0.025, 0]} castShadow><boxGeometry args={[s * 1.25, 0.06, s * 1.25]} />{mat}</mesh>;
+}
+
 // A galvanized round tube between two local points along an axis. `axis`:
 // 'x' (horizontal rail), 'y' (vertical post). Length `len`, radius `r`.
 function Tube({ x = 0, y = 0, z = 0, len, r = 0.06, axis = 'x', color = GALV, cast = true }) {
@@ -144,6 +163,7 @@ export default function Fence3D({ fence, gates, seg = null, selection, onSelect 
     .filter((x, i, a) => i === 0 || x - a[i - 1] > 0.05); // dedupe coincident posts
   const isMesh = ft.style === 'mesh';
   const postSize = fence.postSize ?? 0.3;
+  const postCol = ft.style === 'solid' || ft.style === 'pickets' ? '#52606e' : '#5e564d'; // vinyl/metal vs wood
   const postH = fence.postHeight ?? (H + (isMesh ? 0.3 : 0.2));
 
   const renderPanel = ([s, e]) => {
@@ -344,10 +364,13 @@ export default function Fence3D({ fence, gates, seg = null, selection, onSelect 
           </mesh>
         </group>
       ) : (
-        <mesh key={'post' + i} position={[x, postH / 2, 0]} castShadow receiveShadow>
-          <boxGeometry args={[postSize, postH, postSize]} />
-          <meshStandardMaterial color="#475569" roughness={0.7} />
-        </mesh>
+        <group key={'post' + i} position={[x, 0, 0]}>
+          <mesh position={[0, postH / 2, 0]} castShadow receiveShadow>
+            <boxGeometry args={[postSize, postH, postSize]} />
+            <meshStandardMaterial color={postCol} roughness={0.7} />
+          </mesh>
+          <PostCap cap={fence.postCap || 'flat'} top={postH} size={postSize} color={postCol} />
+        </group>
       ))}
       {/* panels */}
       {spans.map(renderPanel)}

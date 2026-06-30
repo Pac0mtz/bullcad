@@ -6,7 +6,7 @@ import { jsPDF } from 'jspdf';
 import { svg2pdf } from 'svg2pdf.js';
 import {
   dist, lerp, angleOf, centroidOf, wallDimGeometry, wallOpeningDimGeometry, justifiedSegments, wallPolygons, WINDOW_STYLES, FENCE_TYPES, postsAlong,
-  formatFeetInches, windowBars, stairGeometry, detectRooms, roomWalls, roomSignature, EQUIPMENT, OBJECTS, objectFootprint,
+  formatFeetInches, windowBars, stairGeometry, detectRooms, roomWalls, roomSignature, EQUIPMENT, OBJECTS, objectFootprint, rgba,
 } from './geometry.js';
 import { computeQuantities, fenceComponents } from './quantities.js';
 
@@ -66,7 +66,7 @@ export function buildPlanSvg(model, opts = {}) {
   // free-shape affected regions (partial wet areas)
   (model.regions || []).forEach((rg) => {
     if (!rg.points || rg.points.length < 3) return;
-    el.push(`<polygon points="${rg.points.map((p) => `${r2(p.x)},${r2(p.y)}`).join(' ')}" fill="rgba(245,158,11,0.28)" stroke="rgba(180,83,9,0.6)" stroke-width="0.06"/>`);
+    el.push(`<polygon points="${rg.points.map((p) => `${r2(p.x)},${r2(p.y)}`).join(' ')}" fill="${rgba(rg.color || '#f59e0b', 0.28)}" stroke="${rgba(rg.color || '#f59e0b', 0.7)}" stroke-width="0.06"/>`);
   });
 
   // On-page scale (points per foot) so label fonts can be set in real POINTS:

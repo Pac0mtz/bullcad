@@ -137,10 +137,12 @@ export const useStore = create((set, get) => ({
   fenceHeight: FENCE_TYPES.wood.height,
   fenceColor: FENCE_TYPES.wood.color,
   picketCap: 'dogear',  // default top profile for picket-style fences
+  postCap: 'flat',      // default decorative post-top cap
   labelColors: { line: '#0a2540', arrow: '#0a2540', border: '#2563eb' }, // default label callout colors
   stairType: 'straight', stairWidth: 3.5, stairSteps: 13, // stair defaults
   equipmentKind: 'airMover', // active restoration component for the Equipment tool
   objectKind: 'sofa',        // active furniture/fixture for the Object tool
+  regionColor: '#f59e0b',    // default color for new affected regions
   fenceSlats: false,         // chain-link privacy slats
   fenceSlatColor: '#2f6b3d',
   fenceBarbed: false,        // barbed-wire top (chain link)
@@ -286,7 +288,7 @@ export const useStore = create((set, get) => ({
     const id = uid('fence');
     get().commit((s) => {
       const isMesh = FENCE_TYPES[s.fenceType]?.style === 'mesh';
-      const f = { id, a, b, fenceType: s.fenceType, height: s.fenceHeight, postSpacing: s.postSpacing, color: s.fenceColor, cap: s.picketCap };
+      const f = { id, a, b, fenceType: s.fenceType, height: s.fenceHeight, postSpacing: s.postSpacing, color: s.fenceColor, cap: s.picketCap, postCap: s.postCap };
       if (isMesh) Object.assign(f, { slats: s.fenceSlats, slatColor: s.fenceSlatColor, barbed: s.fenceBarbed });
       return { fences: [...s.fences, f] };
     });
@@ -414,7 +416,8 @@ export const useStore = create((set, get) => ({
   addRegion: (points, category = 1) => {
     if (!points || points.length < 3) return null;
     const id = uid('region');
-    get().commit((s) => ({ regions: [...(s.regions || []), { id, points: points.map((p) => ({ x: p.x, y: p.y })), category }] }));
+    const color = get().regionColor || '#f59e0b';
+    get().commit((s) => ({ regions: [...(s.regions || []), { id, points: points.map((p) => ({ x: p.x, y: p.y })), category, color }] }));
     // select the new region AND drop back to Select — so it's immediately editable
     // and a resize-drag can't re-trigger the region capture (which dupes regions)
     set({ selection: { type: 'region', id }, multi: [{ type: 'region', id }], tool: 'select' });
