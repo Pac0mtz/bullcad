@@ -610,6 +610,16 @@ button:focus-visible,
 
 /* selected-wall quick actions — compact dark pill floating at the wall midpoint
    (matches the draw-toolbar look): thickness stepper + delete */
+.hover-tip {
+  position: absolute;
+  z-index: 12;
+  transform: translate(-50%, -130%);
+  pointer-events: none;
+  background: rgba(10, 37, 64, 0.94); color: #fff;
+  font-size: 11.5px; font-weight: 600; line-height: 1;
+  padding: 4px 8px; border-radius: 7px; white-space: nowrap;
+  box-shadow: var(--shadow-md);
+}
 .wall-quick {
   position: absolute;
   z-index: 11;

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer, Line, Circle, Text, Group, Rect, Shape } from 'react-konva';
 import { useStore } from '../store.js';
 import {
-  dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, wallPolygons, stairGeometry, snapAngle, detectRooms, roomWalls, roomSignature, parseLength, simplifyPath, EQUIPMENT, FENCE_TYPES, OBJECTS,
+  dist, lerp, snapPt, snapToNodes, projectOnSegment, formatFeetInches, centroidOf, justifiedSegments, wallPolygons, stairGeometry, snapAngle, detectRooms, roomWalls, roomSignature, parseLength, simplifyPath, EQUIPMENT, FENCE_TYPES, OBJECTS, objectFootprint, DOOR_STYLES, WINDOW_STYLES,
 } from '../utils/geometry.js';
 
 const FENCE_THICK = 0.3; // nominal fence body width (ft) for alignment offset
@@ -703,6 +703,31 @@ export default function Canvas2D() {
     drag.current = { kind: 'dimOffset', wall: wallLike, elemType, elemId, rowExtra, field, moved: false, before: useStore.getState().snapshotGeom() };
   };
 
+  // snap a furniture/fixture object's center to the nearest wall: align it parallel
+  // and seat its back against the interior face (front toward the room). Returns
+  // { x, y, rotation } when within reach, else null.
+  const snapObjectToWall = (pt, obj) => {
+    if (!obj) return null;
+    const meta = OBJECTS[obj.key] || {};
+    const { hFt } = objectFootprint(obj.size || meta.size || 3, meta.ar || 1); // depth (perp to wall)
+    let best = null;
+    for (const w of walls) {
+      const pr = projectOnSegment(pt, w.a, w.b);
+      if (pr.t <= 0.002 || pr.t >= 0.998) continue; // only along the wall span
+      const reach = hFt / 2 + (w.thickness || 0.5) / 2 + 1.3; // snap zone past the back edge
+      if (pr.distance < reach && (!best || pr.distance < best.pr.distance)) best = { w, pr };
+    }
+    if (!best) return null;
+    const { w, pr } = best;
+    const L = dist(w.a, w.b) || 1;
+    const ux = (w.b.x - w.a.x) / L, uy = (w.b.y - w.a.y) / L;
+    let nx = -uy, ny = ux; // wall normal, flipped to point toward the object (into the room)
+    if (nx * (pt.x - pr.point.x) + ny * (pt.y - pr.point.y) < 0) { nx = -nx; ny = -ny; }
+    const off = (w.thickness || 0.5) / 2 + hFt / 2;
+    const rot = ((Math.round(Math.atan2(-nx, ny) * 180 / Math.PI) % 360) + 360) % 360; // local +y (front) → normal
+    return { x: pr.point.x + nx * off, y: pr.point.y + ny * off, rotation: rot };
+  };
+
   const handleDragMove = (raw) => {
     const d = drag.current;
     d.moved = true;
@@ -797,7 +822,9 @@ export default function Canvas2D() {
       store.updateElement('equip', d.id, { x: pt.x, y: pt.y });
     } else if (d.kind === 'object') {
       const pt = snapEnabled ? snapPt(raw, minorStep) : raw;
-      store.updateElement('object', d.id, { x: pt.x, y: pt.y });
+      const obj = objects.find((o) => o.id === d.id);
+      const snap = snapEnabled ? snapObjectToWall(pt, obj) : null; // sit against a nearby wall
+      store.updateElement('object', d.id, snap || { x: pt.x, y: pt.y });
     } else if (d.kind === 'stairWidth' || d.kind === 'stairRun' || d.kind === 'stairRotate') {
       const stp = stairs.find((x) => x.id === d.id);
       if (stp) {
@@ -921,6 +948,22 @@ export default function Canvas2D() {
   const selEquip = selection?.type === 'equip' ? equips.find((eq) => eq.id === selection.id) : null;
   const selObject = selection?.type === 'object' ? objects.find((o) => o.id === selection.id) : null;
   const selRoomData = selection?.type === 'room' ? rooms.find((rm) => rm.sig === selection.id) : null;
+
+  // name + anchor (feet) of the element under the cursor → hover-name tooltip
+  const hoverInfo = useMemo(() => {
+    if (!hoverId || tool !== 'select') return null;
+    let e;
+    if ((e = walls.find((w) => w.id === hoverId))) { const m = lerp(e.a, e.b, 0.5); return { label: `Wall · ${formatFeetInches(dist(e.a, e.b))}`, x: m.x, y: m.y }; }
+    if ((e = openings.find((o) => o.id === hoverId))) { const w = walls.find((x) => x.id === e.wallId); const c = w ? lerp(w.a, w.b, e.t) : { x: 0, y: 0 }; const lbl = e.type === 'door' ? `Door · ${(DOOR_STYLES[e.style] || {}).label || 'Single'}` : e.type === 'window' ? `Window · ${(WINDOW_STYLES[e.style] || {}).label || ''}` : 'Opening'; return { label: lbl, x: c.x, y: c.y }; }
+    if ((e = fences.find((f) => f.id === hoverId))) { const m = lerp(e.a, e.b, 0.5); return { label: `Fence · ${(FENCE_TYPES[e.fenceType] || {}).label || ''}`, x: m.x, y: m.y }; }
+    if ((e = gates.find((g) => g.id === hoverId))) { const f = fences.find((x) => x.id === e.fenceId); const c = f ? lerp(f.a, f.b, e.t) : { x: 0, y: 0 }; return { label: 'Gate', x: c.x, y: c.y }; }
+    if ((e = posts.find((p) => p.id === hoverId))) { const f = fences.find((x) => x.id === e.fenceId); const c = f ? lerp(f.a, f.b, e.t) : { x: 0, y: 0 }; return { label: 'Post', x: c.x, y: c.y }; }
+    if ((e = stairs.find((s) => s.id === hoverId))) return { label: 'Stairs', x: e.x, y: e.y };
+    if ((e = labels.find((l) => l.id === hoverId))) { const p = e.pos || e.anchor || { x: 0, y: 0 }; return { label: 'Label', x: p.x, y: p.y }; }
+    if ((e = equips.find((q) => q.id === hoverId))) return { label: (EQUIPMENT[e.kind] || {}).label || 'Equipment', x: e.x, y: e.y };
+    if ((e = objects.find((o) => o.id === hoverId))) return { label: (OBJECTS[e.key] || {}).label || 'Object', x: e.x, y: e.y };
+    return null;
+  }, [hoverId, tool, walls, openings, fences, gates, posts, stairs, labels, equips, objects]);
 
   // marquee group: set of selected ids + the group bounding box (feet)
   const multiSet = useMemo(() => new Set(multi.map((m) => m.id)), [multi]);
@@ -1607,6 +1650,13 @@ export default function Canvas2D() {
               }} />
           </div>
         );
+      })()}
+
+      {/* hover-name tooltip — the component under the cursor (Select tool) */}
+      {hoverInfo && !drag.current && (() => {
+        const sx = view.x + hoverInfo.x * scale * view.k;
+        const sy = view.y + hoverInfo.y * scale * view.k;
+        return <div className="hover-tip" style={{ left: Math.max(8, Math.min(size.w - 8, sx)), top: Math.max(16, sy) }}>{hoverInfo.label}</div>;
       })()}
 
       {/* selected-wall quick actions — a compact box riding the wall midpoint:
