@@ -167,8 +167,13 @@ export function buildPlanSvg(model, opts = {}) {
         inner += `<line x1="${r2(-hw)}" y1="${r2(-off)}" x2="${r2(o.width * 0.06)}" y2="${r2(-off)}" stroke="${NAVY}" stroke-width="0.12" stroke-linecap="round"/>`;
         inner += `<line x1="${r2(-o.width * 0.06)}" y1="${r2(off)}" x2="${r2(hw)}" y2="${r2(off)}" stroke="${NAVY}" stroke-width="0.12" stroke-linecap="round"/>`;
       } else if (style === 'pocket') {
-        inner += `<line x1="${r2(-hw)}" y1="0" x2="${r2(hw)}" y2="0" stroke="${NAVY}" stroke-width="0.1" stroke-linecap="round"/>`;
-        inner += `<line x1="${r2(hw)}" y1="0" x2="${r2(hw + o.width * 0.9)}" y2="0" stroke="${NAVY}" stroke-width="0.05" stroke-dasharray="0.3 0.22"/>`;
+        // white pocket cavity carved into the wall + dashed door slab inside it
+        const pdir = o.hinge === 'right' ? -1 : 1;
+        const cav = th * 0.62, len = Math.max(o.width, 1.5);
+        const x0 = pdir > 0 ? hw : -hw - len;
+        inner += `<rect x="${r2(x0)}" y="${r2(-cav / 2)}" width="${r2(len)}" height="${r2(cav)}" fill="#ffffff" stroke="${NAVY}" stroke-width="0.04"/>`;
+        inner += `<rect x="${r2(x0 + 0.12)}" y="${r2(-cav * 0.17)}" width="${r2(len - 0.24)}" height="${r2(cav * 0.34)}" fill="none" stroke="${NAVY}" stroke-width="0.05" stroke-dasharray="0.25 0.16"/>`;
+        inner += `<line x1="${r2(-pdir * hw)}" y1="${r2(-cav / 2)}" x2="${r2(-pdir * hw)}" y2="${r2(cav / 2)}" stroke="${NAVY}" stroke-width="0.07"/>`;
       } else if (style === 'bifold') {
         const peak = o.width * 0.2 * dd;
         inner += `<polyline points="${r2(-hw)},0 ${r2(-hw / 2)},${r2(peak)} 0,0 ${r2(hw / 2)},${r2(peak)} ${r2(hw)},0" fill="none" stroke="${NAVY}" stroke-width="0.06"/>`;

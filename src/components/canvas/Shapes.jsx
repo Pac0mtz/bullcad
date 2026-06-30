@@ -286,10 +286,18 @@ export function OpeningShape({ op, wall, scale, selected, hovered, onSelect, onH
           );
         }
         if (style === 'pocket') {
+          // door retracts into a wall pocket on one side. Carve a WHITE cavity into
+          // the wall poché (so it reads on the dark wall) with the door slab dashed
+          // inside it, plus the door's leading edge at the opening.
+          const pdir = op.hinge === 'right' ? -1 : 1;
+          const cav = Math.min(th * 0.62, 7);
+          const len = Math.max(w, 10);
+          const x0 = pdir > 0 ? w / 2 : -w / 2 - len;
           return (
             <>
-              <Line points={[-w / 2, 0, w / 2, 0]} stroke={accent} strokeWidth={2.5} lineCap="round" />
-              <Line points={[w / 2, 0, w * 1.4, 0]} stroke={accent} strokeWidth={1.5} dash={[5, 4]} />
+              <Rect x={x0} y={-cav / 2} width={len} height={cav} fill={palette.opMask} stroke={accent} strokeWidth={1} />
+              <Rect x={x0 + 1.5} y={-cav * 0.17} width={len - 3} height={cav * 0.34} stroke={accent} strokeWidth={1.5} dash={[5, 3]} fillEnabled={false} cornerRadius={0.5} />
+              <Line points={[-pdir * w / 2, -cav / 2, -pdir * w / 2, cav / 2]} stroke={accent} strokeWidth={2.5} />
             </>
           );
         }
